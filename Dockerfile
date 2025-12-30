@@ -16,8 +16,6 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --silent
 COPY backend/ .
-# Generate Prisma client using the schema file directly
-RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
 # Stage 3: Production runtime
@@ -34,8 +32,6 @@ RUN npm ci --only=production --silent
 # Copy built backend files
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=backend-builder /app/prisma ./prisma
-# Copy Prisma configuration if it exists
-COPY --from=backend-builder /app/prisma.config.ts ./ 2>/dev/null || :
 
 # Copy built frontend files
 COPY --from=frontend-builder /app/dist ./public
@@ -43,8 +39,8 @@ COPY --from=frontend-builder /app/dist ./public
 # Create necessary directories
 RUN mkdir -p uploads logs
 
-# Generate Prisma Client
-RUN npx prisma generate
+# Generate Prisma Client at runtime (when env vars are available)
+# This will be done in the CMD script
 
 # Expose port
 EXPOSE $PORT
@@ -53,6 +49,6 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -e "const http=require('http'); const req=http.request({hostname:'localhost',port:process.env.PORT||5000,path:'/health'},(res)=>{process.exit(res.statusCode===200?0:1)}); req.on('error',()=>process.exit(1)); req.end();"
 
-# Start the application
-CMD ["node", "dist/index.js"]
+# Start the application (generate Prisma client first)
+CMD ["sh", "-c", "npx prisma generate && node dist/index.js"]
 
