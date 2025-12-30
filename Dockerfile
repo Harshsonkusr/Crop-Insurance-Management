@@ -16,8 +16,8 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --silent
 COPY backend/ .
-# Generate Prisma client before building (needed for TypeScript types)
-RUN npx prisma generate
+# Generate Prisma client using the schema file directly
+RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
 # Stage 3: Production runtime
