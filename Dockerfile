@@ -16,6 +16,8 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --silent
 COPY backend/ .
+# Generate Prisma client before building (schema file is available now)
+RUN npx prisma generate
 RUN npm run build
 
 # Stage 3: Production runtime
@@ -49,6 +51,6 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -e "const http=require('http'); const req=http.request({hostname:'localhost',port:process.env.PORT||5000,path:'/health'},(res)=>{process.exit(res.statusCode===200?0:1)}); req.on('error',()=>process.exit(1)); req.end();"
 
-# Start the application (generate Prisma client first)
-CMD ["sh", "-c", "npx prisma generate && node dist/index.js"]
+# Start the application
+CMD ["node", "dist/index.js"]
 
