@@ -1,0 +1,92 @@
+/* Logo Display Styles - No Stretch, No Blur */
+
+/* Base logo container */
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Logo image base styles */
+.logo-image,
+.logo-navbar,
+.logo-sidebar,
+.logo-icon,
+.logo-hd,
+.logo-default {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain; /* Maintains aspect ratio - prevents stretching */
+  image-rendering: -webkit-optimize-contrast; /* WebKit browsers */
+  image-rendering: crisp-edges; /* Sharp edges */
+  image-rendering: auto; /* Fallback */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  backface-visibility: hidden;
+  transform: translateZ(0); /* Hardware acceleration - prevents blur */
+}
+
+/* Specific logo sizes - Even smaller */
+.logo-navbar {
+  width: 50px; /* Even smaller - reduced from 70px */
+  height: auto;
+}
+
+.logo-sidebar {
+  width: 45px; /* Even smaller - reduced from 65px */
+  height: auto;
+}
+
+.logo-icon {
+  width: 20px; /* Even smaller - reduced from 24px */
+  height: 20px; /* Even smaller - reduced from 24px */
+  object-fit: contain;
+}
+
+.logo-hd {
+  width: 400px; /* Even smaller - reduced from 600px */
+  max-width: 100%;
+  height: auto;
+}
+
+.logo-default {
+  width: 45px; /* Even smaller - reduced from 65px */
+  height: auto;
+}
+
+/* Hover effect - smooth scale without blur */
+.logo-image:hover,
+.logo-navbar:hover,
+.logo-sidebar:hover,
+.logo-icon:hover {
+  transform: translateZ(0) scale(1.05);
+  transition: transform 0.3s ease-out;
+}
+
+/* High DPI displays (Retina, 4K) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .logo-image,
+  .logo-navbar,
+  .logo-sidebar,
+  .logo-icon {
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
+
+/* Prevent layout shift */
+.logo-container img {
+  display: block;
+}
+
+/* Loading state */
+.logo-container img[loading="lazy"] {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.logo-container img[loading="lazy"].loaded {
+  opacity: 1;
+}
+

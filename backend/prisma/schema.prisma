@@ -1,0 +1,438 @@
+// Prisma schema for migrating ClaimEasy backend from MongoDB to PostgreSQL
+// Tables are mapped to snake_case for clarity; enums mirror current app states.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  SERVICE_PROVIDER
+  FARMER
+}
+
+enum UserStatus {
+  active
+  banned
+  pending
+}
+
+enum ServiceProviderStatus {
+  active
+  inactive
+  pending
+}
+
+enum PolicyStatus {
+  Active
+  Inactive
+  Expired
+}
+
+enum ClaimStatus {
+  pending
+  approved
+  rejected
+  in_progress
+  resolved
+  cancelled
+  under_review
+  fraud_suspect
+  Inspected
+}
+
+enum VerificationStatus {
+  Pending
+  AI_Processed_Admin_Review
+  AI_Satellite_Processed
+  Manual_Review
+  Verified
+  fraud_suspect
+}
+
+enum Theme {
+  light
+  dark
+}
+
+enum FileKind {
+  document
+  image
+}
+
+enum PolicySource {
+  internal
+  external
+}
+
+enum PolicySyncStatus {
+  synced
+  stale
+  pending
+  failed
+}
+
+enum ConsentType {
+  aadhaar_lookup
+  aadhaar_linking
+  policy_sync
+  data_sharing
+}
+
+enum SessionStatus {
+  active
+  revoked
+  expired
+}
+
+enum IdempotencyStatus {
+  pending
+  completed
+  failed
+}
+
+model User {
+  id                    String     @id @default(uuid())
+  email                 String?    @unique
+  password              String?
+  role                  UserRole
+  name                  String
+  profilePhoto          String?
+  mobileNumber          String?    @unique
+  // Encrypted PII fields (encrypted with KMS)
+  mobileNumberEncrypted String? // Encrypted phone number
+  emailEncrypted        String? // Encrypted email
+  otp                   String?
+  otpExpires            DateTime?
+  status                UserStatus @default(active)
+  isApproved            Boolean    @default(true)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  serviceProvider ServiceProvider?
+  policies        Policy[]         @relation("PolicyFarmer")
+  policyRequests  PolicyRequest[]
+  claims          Claim[]          @relation("ClaimFarmer")
+  farmDetails     FarmDetails?     @relation("UserFarmDetails")
+  userPreferences UserPreferences?
+  auditLogs       AuditLog[]
+  consents        Consent[]
+  sessions        Session[]
+}
+
+model ServiceProvider {
+  id            String                @id @default(uuid())
+  user          User                  @relation(fields: [userId], references: [id])
+  userId        String                @unique
+  name          String
+  email         String                @unique
+  phone         String                @unique
+  address       String?
+  serviceType   String
+  licenseNumber String? // For KYC verification
+  kycVerified   Boolean               @default(false)
+  kycDocuments  Json? // Store KYC document paths/metadata
+  status        ServiceProviderStatus @default(pending)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  policies       Policy[]
+  policyRequests PolicyRequest[]
+  claims         Claim[]         @relation("ClaimAssignedTo")
+  crops          Crop[]          @relation("ServiceProviderCrops")
+}
+
+model Policy {
+  id                 String           @id @default(uuid())
+  policyNumber       String           @unique
+  farmer             User             @relation("PolicyFarmer", fields: [farmerId], references: [id])
+  farmerId           String
+  serviceProvider    ServiceProvider  @relation(fields: [serviceProviderId], references: [id])
+  serviceProviderId  String
+  cropType           String
+  insuredArea        Float
+  startDate          DateTime
+  endDate            DateTime
+  status             PolicyStatus     @default(Active)
+  premium            Float
+  sumInsured         Float
+  source             PolicySource     @default(internal) // internal or external
+  policyVerified     Boolean          @default(false) // Verified by insurer
+  externalSyncAt     DateTime? // Last external sync timestamp
+  syncStatus         PolicySyncStatus @default(pending) // For external policies
+  externalPolicyId   String? // External insurer's policy ID
+  insurerApiResponse Json? // Store external API response
+  // Policy images from creation (for AI matching with claim images)
+  policyImages       Json? // Array of image paths/metadata from policy creation
+  // Crop details from policy request
+  cropDetails        Json? // Crop variety, expected yield, cultivation season, etc.
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  claims       Claim[]         @relation("ClaimPolicy")
+  chosenByClaims Claim[]         @relation("ChosenPolicy")
+
+  @@index([farmerId, status])
+  @@index([serviceProviderId])
+  @@index([source, syncStatus])
+}
+
+model Claim {
+  id                    String             @id @default(uuid())
+  claimId               String             @unique
+  policy                Policy             @relation("ClaimPolicy", fields: [policyId], references: [id])
+  policyId              String
+  // Policy conflict resolution: if multiple active policies exist, store chosen one
+  chosenPolicy          Policy?            @relation("ChosenPolicy", fields: [chosenPolicyId], references: [id])
+  chosenPolicyId        String?
+  farmer                User               @relation("ClaimFarmer", fields: [farmerId], references: [id])
+  farmerId              String
+  assignedTo            ServiceProvider?   @relation("ClaimAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId          String?
+  description           String
+  locationOfIncident    String
+  dateOfIncident        DateTime
+  dateOfClaim           DateTime
+  amountClaimed         Float?
+  status                ClaimStatus        @default(pending)
+  verificationStatus    VerificationStatus @default(Pending)
+  resolutionDetails     String?
+  resolutionDate        DateTime?
+  notes                 String[]
+  aiDamageAssessment    Json?
+  satelliteVerification Json?
+  verificationData      Json?
+  inspectionReport      Json?
+  damageConfirmation    String?
+  fraudFlaggedAt        DateTime?
+  // AI results
+  aiDamagePercent       Float?
+  aiRecommendedAmount   Float?
+  aiValidationFlags     Json?
+  aiReport              Json?
+  // Admin override
+  adminOverrideReason   String?
+  adminOverrideAt       DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  documents       ClaimDocument[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@index([farmerId, status])
+  @@index([assignedToId, status])
+  @@index([policyId])
+}
+
+model ClaimDocument {
+  id         String   @id @default(uuid())
+  claim      Claim    @relation(fields: [claimId], references: [id])
+  claimId    String
+  path       String
+  kind       FileKind
+  fileName   String?
+  fileSize   Int? // Size in bytes
+  mimeType   String?
+  checksum   String? // SHA-256 checksum
+  scanned    Boolean  @default(false) // Virus/malware scan status
+  scanResult Json? // Scan result details
+  createdAt  DateTime @default(now())
+
+  @@index([claimId])
+}
+
+model FarmDetails {
+  id                 String   @id @default(uuid())
+  farmer             User     @relation("UserFarmDetails", fields: [farmerId], references: [id])
+  farmerId           String   @unique
+  farmId             String?
+  farmName           String?
+  location           String?
+  address            String? // Village/District
+  district           String?
+  village            String?
+  area               Float?
+  farmSize           String?
+  crops              String[]
+  cropType           String?
+  soilType           String?
+  irrigationMethod   String?
+  ownerName          String?
+  // Aadhaar - stored as HMAC-SHA256 hash (never raw)
+  aadhaarHash        String?  @unique // HMAC-SHA256 hash of Aadhaar
+  latitude           String?
+  longitude          String?
+  verificationStatus String?  @default("Pending")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([aadhaarHash])
+}
+
+model Crop {
+  id                String          @id @default(uuid())
+  serviceProvider   ServiceProvider @relation("ServiceProviderCrops", fields: [serviceProviderId], references: [id])
+  serviceProviderId String
+  name              String
+  description       String?
+  expectedYield     Float?
+  cultivationSeason String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  timestamp    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+  userId       String?
+  action       String
+  details      Json
+  ipAddress    String?
+  userAgent    String?
+  resourceType String? // e.g., 'claim', 'policy', 'user'
+  resourceId   String? // ID of the resource affected
+  changes      Json? // Before/after changes for updates
+}
+
+model SystemSettings {
+  id           String   @id @default(uuid())
+  settingName  String   @unique
+  settingValue Json
+  lastUpdated  DateTime @default(now())
+}
+
+model UserPreferences {
+  id                 String   @id @default(uuid())
+  user               User     @relation(fields: [userId], references: [id])
+  userId             String   @unique
+  sidebarOpen        Boolean  @default(true)
+  theme              Theme    @default(light)
+  language           String   @default("en")
+  notificationsEmail Boolean  @default(true)
+  notificationsSms   Boolean  @default(false)
+  notificationsPush  Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Consent management for Aadhaar and data sharing
+model Consent {
+  id          String      @id @default(uuid())
+  user        User        @relation(fields: [userId], references: [id])
+  userId      String
+  consentType ConsentType
+  consentText String // Full text of consent
+  granted     Boolean     @default(true)
+  grantedAt   DateTime    @default(now())
+  revokedAt   DateTime?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId, consentType])
+  @@index([granted])
+}
+
+// Session management for multi-device support
+model Session {
+  id           String        @id @default(uuid())
+  user         User          @relation(fields: [userId], references: [id])
+  userId       String
+  token        String        @unique // JWT token (or refresh token)
+  refreshToken String?       @unique // Refresh token if using JWT+refresh
+  deviceInfo   Json? // Device name, OS, browser
+  ipAddress    String?
+  userAgent    String?
+  status       SessionStatus @default(active)
+  lastActivity DateTime      @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@index([token])
+  @@index([refreshToken])
+}
+
+// Idempotency key storage
+model IdempotencyKey {
+  id           String            @id @default(uuid())
+  key          String            @unique // The idempotency key from header
+  claim        Claim?            @relation(fields: [claimId], references: [id])
+  claimId      String?
+  status       IdempotencyStatus @default(pending)
+  requestBody  Json? // Store request body for replay
+  responseBody Json? // Store response for duplicate requests
+  createdAt    DateTime          @default(now())
+  expiresAt    DateTime // Clean up old keys
+
+  @@index([key])
+  @@index([claimId])
+  @@index([status, expiresAt])
+}
+
+// Policy request workflow (farmer requests, SP issues)
+model PolicyRequest {
+  id                 String           @id @default(uuid())
+  farmer             User             @relation(fields: [farmerId], references: [id])
+  farmerId           String
+  serviceProvider    ServiceProvider? @relation(fields: [serviceProviderId], references: [id])
+  serviceProviderId  String?
+  cropType           String
+  insuredArea        Float
+  requestedStartDate DateTime?
+  documents          Json? // Document paths/metadata
+  // Farm photos from different angles (required for new/renewal policy)
+  farmImages         Json? // Array of farm photo paths/metadata from different angles
+  // Detailed crop information
+  cropDetails        Json? // Crop variety, expected yield, cultivation season, soil type, irrigation method, etc.
+  status             String           @default("pending") // pending, approved, rejected, issued
+  rejectionReason    String?
+  issuedPolicyId     String? // Link to Policy if issued
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([farmerId, status])
+  @@index([serviceProviderId, status])
+}
+
+// Rate limit tracking
+model RateLimit {
+  id          String   @id @default(uuid())
+  identifier  String // IP address or user ID
+  endpoint    String // API endpoint
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+  windowEnd   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([identifier, endpoint, windowStart])
+  @@index([identifier, endpoint, windowEnd])
+}
+
+// AI task queue tracking
+model AiTask {
+  id           String    @id @default(uuid())
+  claimId      String
+  taskType     String // 'ocr', 'satellite', 'fraud_detection'
+  status       String    @default("pending") // pending, processing, completed, failed
+  inputData    Json?
+  outputData   Json?
+  errorMessage String?
+  retryCount   Int       @default(0)
+  maxRetries   Int       @default(3)
+  processedAt  DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([claimId, status])
+  @@index([status, createdAt])
+}
