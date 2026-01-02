@@ -11,13 +11,15 @@ ENV VITE_API_BASE_URL=/api
 RUN npm run build
 
 # Stage 2: Build backend
-FROM node:22-alpine AS backend-builder
+FROM node:22 AS backend-builder
 WORKDIR /app
-# Install dependencies for Prisma
-RUN apk add --no-cache libc6-compat openssl
 COPY backend/package*.json ./
+# Skip automatic prisma generate during install
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 RUN npm ci --silent
 COPY backend/ .
+# Provide a dummy DATABASE_URL for build-time validation if needed
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 # Generate Prisma Client
 RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
