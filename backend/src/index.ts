@@ -112,9 +112,18 @@ app.use('/api', serviceProviderRoutes);
 const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve Frontend Static Files (Unified Deployment)
-const frontendPath = path.join(__dirname, '../public');
-app.use(express.static(frontendPath));
+// SPA Fallback: Serve index.html for any unknown non-API routes
+app.get('*path', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  const frontendPath = path.join(__dirname, '../public');
+  res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
+    if (err) {
+      next();
+    }
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -123,18 +132,6 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-  });
-});
-
-// SPA Fallback: Serve index.html for any unknown non-API routes
-app.get('(.*)', (req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return next();
-  }
-  res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
-    if (err) {
-      next();
-    }
   });
 });
 
