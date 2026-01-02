@@ -13,12 +13,13 @@ RUN npm run build
 # Stage 2: Build backend
 FROM node:22-alpine AS backend-builder
 WORKDIR /app
+# Install dependencies for Prisma
+RUN apk add --no-cache libc6-compat openssl
 COPY backend/package*.json ./
 RUN npm ci --silent
 COPY backend/ .
-# Remove the TS config file temporarily to prevent Prisma CLI from failing on TS syntax
-# while generating the client. We point directly to the schema instead.
-RUN rm -f prisma.config.ts && npx prisma generate --schema=prisma/schema.prisma
+# Generate Prisma Client
+RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
 # Stage 3: Production runtime
