@@ -5,14 +5,17 @@ import { UserRole } from '@prisma/client';
 async function seed() {
   console.log('🌱 Seeding database...');
 
-  const hashedPassword = await bcrypt.hash('password123', 10);
+  const hashedPassword = await bcrypt.hash(process.env.SUPER_ADMIN_PASSWORD || 'password123', 10);
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@claimeasy.com';
 
   // Create Super Admin
   const superAdmin = await prisma.user.upsert({
-    where: { email: 'superadmin@claimeasy.com' },
-    update: {},
+    where: { email: superAdminEmail },
+    update: {
+      password: hashedPassword // Allow updating password via seed
+    },
     create: {
-      email: 'superadmin@claimeasy.com',
+      email: superAdminEmail,
       password: hashedPassword,
       name: 'Super Admin',
       role: UserRole.SUPER_ADMIN,
@@ -20,7 +23,7 @@ async function seed() {
       isApproved: true,
     },
   });
-  console.log(`✅ Created Super Admin: ${superAdmin.email}`);
+  console.log(`✅ Created/Updated Super Admin: ${superAdmin.email}`);
 
   // Create Admin
   const admin = await prisma.user.upsert({
