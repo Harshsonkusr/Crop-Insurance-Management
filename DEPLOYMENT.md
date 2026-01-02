@@ -38,6 +38,27 @@ In your deployment dashboard (Render/Railway), add the following environment var
 5. Add the environment variables in the **Env Vars** tab.
 6. Click **Create Web Service**.
 
+### Step 4: Real SMS Setup (Twilio)
+To enable real SMS instead of logs:
+1. Sign up at [Twilio.com](https://www.twilio.com/).
+2. In the Twilio Console, copy your **Account SID** and **Auth Token**.
+3. Click "Get a Trial Number" to get your **Twilio Phone Number**.
+4. Add these to your Render/Railway Env Vars:
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `TWILIO_PHONE_NUMBER`
+5. **Note:** On trial accounts, you must verify your own phone number in Twilio under "Verified Caller IDs" to receive SMS.
+
+### Step 5: Custom Superadmin
+To set your own admin email and password:
+1. Add these Env Vars to Render/Railway:
+   - `SUPER_ADMIN_EMAIL`
+   - `SUPER_ADMIN_PASSWORD`
+2. Run the seed command in your hosting dashboard shell:
+   ```bash
+   npm run db:seed
+   ```
+
 ## 🛠️ Maintenance
 
 ### Running Migrations
