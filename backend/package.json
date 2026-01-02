@@ -11,6 +11,7 @@
     "lint": "eslint src/**/*.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "dotenv -e .env -- prisma migrate dev",
+    "seed": "dotenv -e .env -- ts-node src/seed.ts",
     "create-users": "node create-test-users.js",
     "test-api": "node test-backend.js",
     "clear:test-data": "dotenv -e .env -- ts-node scripts/clear-test-data.ts",
