@@ -7,11 +7,11 @@
     "dev": "vite",
     "dev:backend": "cd backend && npm run dev",
     "dev:full": "concurrently \"npm run dev\" \"npm run dev:backend\"",
+    "db:seed": "npm run seed --prefix backend",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "db:seed": "dotenv -e .env -- npx prisma db seed --config=./backend/prisma.config.ts -- --preview-feature"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
