@@ -16,8 +16,9 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --silent
 COPY backend/ .
-# Generate Prisma client using the schema file directly
-RUN npx prisma generate --schema=prisma/schema.prisma
+# Remove the TS config file temporarily to prevent Prisma CLI from failing on TS syntax
+# while generating the client. We point directly to the schema instead.
+RUN rm -f prisma.config.ts && npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
 # Stage 3: Production runtime
