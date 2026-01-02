@@ -1,55 +1,50 @@
 # Multi-stage build for production
 
 # Stage 1: Build frontend
-FROM node:22-alpine AS frontend-builder
+FROM node:18-alpine AS frontend-builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --silent
+RUN npm ci
 COPY . .
-# Set API URL to relative path for unified deployment
-ENV VITE_API_BASE_URL=/api
 RUN npm run build
 
 # Stage 2: Build backend
-FROM node:22 AS backend-builder
+FROM node:18-alpine AS backend-builder
 WORKDIR /app
 COPY backend/package*.json ./
-# Skip automatic prisma generate during install
-ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
-RUN npm ci --silent
+RUN npm ci
 COPY backend/ .
-# Provide a dummy DATABASE_URL for build-time validation if needed
-ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
-# Generate Prisma Client
-RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
 # Stage 3: Production runtime
-FROM node:22-alpine
+FROM node:18-alpine
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache libc6-compat openssl
+# Install production dependencies for backend
+COPY backend/package*.json ./
+RUN npm ci --only=production
 
-# Copy backend dependencies and build
-COPY --from=backend-builder /app/node_modules ./node_modules
+# Copy built backend files
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=backend-builder /app/prisma ./prisma
-COPY --from=backend-builder /app/package*.json ./
+COPY --from=backend-builder /app/prisma.config.ts ./
 
 # Copy built frontend files
 COPY --from=frontend-builder /app/dist ./public
 
-# Copy start script
-COPY backend/start.sh ./
-RUN chmod +x start.sh
-
-# Create necessary directories
+# Create uploads directory
 RUN mkdir -p uploads logs
 
-# Expose port (Render uses PORT env var)
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Expose port
 EXPOSE 5000
 
-# Start the application via start script
-CMD ["./start.sh"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:5000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start the application
+CMD ["node", "dist/index.js"]
 
