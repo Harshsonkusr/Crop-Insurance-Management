@@ -35,13 +35,14 @@ RUN apk add --no-cache libc6-compat openssl
 COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=backend-builder /app/prisma ./prisma
+COPY --from=backend-builder /app/prisma.config.ts ./
 COPY --from=backend-builder /app/package*.json ./
 
 # Copy built frontend files
 COPY --from=frontend-builder /app/dist ./public
 
 # Copy start script
-COPY backend/start.sh ./
+COPY start.sh ./
 RUN chmod +x start.sh
 
 # Create necessary directories
