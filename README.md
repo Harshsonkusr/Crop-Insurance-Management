@@ -22,53 +22,49 @@ ClaimEasy is an artificial intelligence-powered digital solution that transforms
 - shadcn/ui
 
 **Backend:**
-- Node.js with Express.js
+- Node.js with Express.js (Express 5)
 - TypeScript
-- MongoDB with Mongoose
+- PostgreSQL with Prisma ORM
 - JWT Authentication
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- MongoDB database
+- Node.js 22+ and npm
+- PostgreSQL database
 - Environment variables configured
 
-### Installation
+### Installation & Deployment
+
+This project uses a **Unified Deployment** strategy where the backend serves the frontend.
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Harshsonkusr/Crop-Insurance-Management.git
 cd ClaimEasy
 
-# Install frontend dependencies
+# Install dependencies (Root)
 npm install
 
 # Install backend dependencies
 cd backend
 npm install
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
+# Run database migrations
+npx prisma migrate dev
 
-# Create test users
-node create-test-users.js
-
-# Start development servers
-# Terminal 1: Backend
-cd backend
-npm run dev
-
-# Terminal 2: Frontend
-npm run dev
+# Start development (Both Frontend & Backend)
+npm run dev:full
 ```
+
+### Deployment
+
+For production deployment (Render/Railway), see the [Deployment Guide](./DEPLOYMENT.md).
 
 ### Default Test Users
 
-- **Admin**: admin@test.com / password123
-- **Service Provider**: provider@test.com / password123
+- **Admin**: admin@claimeasy.com / password123 (after seeding)
 - **Farmer**: mobile 1234567890 (OTP-based login)
 
 ## Project Structure

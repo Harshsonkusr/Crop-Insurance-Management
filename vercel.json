@@ -1,12 +1,18 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/:path*",
-      "destination": "https://your-backend-url.com/api/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "Dockerfile",
+      "use": "@vercel/docker"
     }
-  ]
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "VITE_API_BASE_URL": "/api"
+  }
 }
