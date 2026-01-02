@@ -28,34 +28,25 @@ WORKDIR /app
 # Install system dependencies
 RUN apk add --no-cache libc6-compat openssl
 
-# Install production dependencies for backend
-COPY backend/package*.json ./
-# We don't run npm ci here to avoid overwriting the Prisma client
-# Instead, we will copy the entire node_modules from the builder
-
-# Copy built backend files
+# Copy backend dependencies and build
+COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=backend-builder /app/prisma ./prisma
-# Copy the entire node_modules from backend-builder
-# This includes the generated Prisma client and all dependencies
-COPY --from=backend-builder /app/node_modules ./node_modules
+COPY --from=backend-builder /app/package*.json ./
 
 # Copy built frontend files
 COPY --from=frontend-builder /app/dist ./public
 
+# Copy start script
+COPY backend/start.sh ./
+RUN chmod +x start.sh
+
 # Create necessary directories
 RUN mkdir -p uploads logs
 
-# Generate Prisma Client at runtime (when env vars are available)
-# This will be done in the CMD script
+# Expose port (Render uses PORT env var)
+EXPOSE 5000
 
-# Expose port
-EXPOSE $PORT
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "const http=require('http'); const req=http.request({hostname:'localhost',port:process.env.PORT||5000,path:'/health'},(res)=>{process.exit(res.statusCode===200?0:1)}); req.on('error',()=>process.exit(1)); req.end();"
-
-# Start the application
-CMD ["node", "dist/index.js"]
+# Start the application via start script
+CMD ["./start.sh"]
 
