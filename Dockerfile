@@ -30,15 +30,15 @@ RUN apk add --no-cache libc6-compat openssl
 
 # Install production dependencies for backend
 COPY backend/package*.json ./
-RUN npm ci --only=production --silent
-
-# Copy the generated Prisma client from the builder stage
-# This is required because 'prisma generate' puts files in node_modules/.prisma
-COPY --from=backend-builder /app/node_modules/.prisma ./node_modules/.prisma
+# We don't run npm ci here to avoid overwriting the Prisma client
+# Instead, we will copy the entire node_modules from the builder
 
 # Copy built backend files
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=backend-builder /app/prisma ./prisma
+# Copy the entire node_modules from backend-builder
+# This includes the generated Prisma client and all dependencies
+COPY --from=backend-builder /app/node_modules ./node_modules
 
 # Copy built frontend files
 COPY --from=frontend-builder /app/dist ./public
