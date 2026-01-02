@@ -112,6 +112,10 @@ app.use('/api', serviceProviderRoutes);
 const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
 
+// Serve static frontend files
+const frontendPath = path.join(__dirname, '../public');
+app.use(express.static(frontendPath));
+
 // SPA Fallback: Serve index.html for any unknown non-API routes
 app.get('*path', (req, res, next) => {
   if (req.path.startsWith('/api')) {
