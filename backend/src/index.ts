@@ -31,6 +31,10 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Serve static frontend files - DO THIS FIRST to avoid middleware interference
+const frontendPath = path.resolve(process.cwd(), 'public');
+app.use(express.static(frontendPath));
+
 // CORS configuration - MUST be before other middleware
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -112,16 +116,11 @@ app.use('/api', serviceProviderRoutes);
 const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve static frontend files
-const frontendPath = path.join(__dirname, '../public');
-app.use(express.static(frontendPath));
-
 // SPA Fallback: Serve index.html for any unknown non-API routes
 app.get('*path', (req, res, next) => {
   if (req.path.startsWith('/api')) {
     return next();
   }
-  const frontendPath = path.join(__dirname, '../public');
   res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
     if (err) {
       next();
