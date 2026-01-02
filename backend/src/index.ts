@@ -127,7 +127,7 @@ app.get('/health', (req, res) => {
 });
 
 // SPA Fallback: Serve index.html for any unknown non-API routes
-app.get('*', (req, res, next) => {
+app.get('(.*)', (req, res, next) => {
   if (req.path.startsWith('/api')) {
     return next();
   }
