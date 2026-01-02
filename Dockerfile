@@ -21,7 +21,7 @@ COPY backend/ .
 # Provide a dummy DATABASE_URL for build-time validation
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 # Generate Prisma Client
-RUN npx prisma generate --schema=prisma/schema.prisma
+RUN npx prisma generate
 RUN npm run build
 
 # Stage 3: Production runtime
