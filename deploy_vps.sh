@@ -50,6 +50,7 @@ UPLOAD_DIR="./uploads"
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL="http://103.159.239.34"
+# Twilio keys will be added manually to prevent git leakage
 EOT
     echo "✅ Created .env file. PLEASE UPDATE SECRETS LATER!"
 fi
