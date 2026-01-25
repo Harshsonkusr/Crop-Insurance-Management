@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { ClaimService } from '../services/claim.service';
 import { prisma } from '../db';
+import { VerificationStatus } from '@prisma/client';
 import { IdempotencyService } from '../services/idempotency.service';
 import { FileValidationService } from '../services/fileValidation.service';
 import { auditLogService } from '../services/auditLog.service';
@@ -100,8 +101,8 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
     }
 
     if (!policyId) {
-      return res.status(400).json({ 
-        message: `Policy "${policyNumberOrId}" not found for this farmer.` 
+      return res.status(400).json({
+        message: `Policy "${policyNumberOrId}" not found for this farmer.`
       });
     }
 
@@ -151,10 +152,10 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
     let newClaim;
     try {
       newClaim = await claimService.createClaim(
-        { 
-          policyId, 
-          dateOfIncident: new Date(dateOfIncident), 
-          description, 
+        {
+          policyId,
+          dateOfIncident: new Date(dateOfIncident),
+          description,
           locationOfIncident: location,
           amountClaimed: amountClaimed ? parseFloat(amountClaimed.toString()) : undefined,
           chosenPolicyId: chosenPolicyId || policyId // Use chosen policy if provided, else use policyId
@@ -168,7 +169,7 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
       // Verify claim was created successfully
       if (!newClaim || !newClaim.id) {
         Logger.error('Claim creation returned invalid response', { newClaim, userId: req.userId });
-        return res.status(500).json({ 
+        return res.status(500).json({
           message: 'Claim was created but could not be retrieved. Please contact support.',
           error: 'Invalid claim response'
         });
@@ -182,8 +183,8 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
           farmerId,
           policyId,
         });
-        return res.status(500).json({ 
-          message: 'Claim was created but not assigned to a service provider. Please contact support.',
+        return res.status(500).json({
+          message: 'Claim was created but not assigned to an insurer. Please contact support.',
           error: 'Missing assignedToId'
         });
       }
@@ -200,17 +201,17 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
       await auditLogService.logFromRequest(
         req,
         'claim_created',
-        { 
-          claimId: newClaim.id, 
+        {
+          claimId: newClaim.id,
           claimIdFormatted: (newClaim as any).claimId,
           policyId,
-          assignedToId: (newClaim as any).assignedToId 
+          assignedToId: (newClaim as any).assignedToId
         },
         'claim',
         newClaim.id
       );
 
-      Logger.claim.created(`Claim ${(newClaim as any).claimId} created and assigned to service provider ${(newClaim as any).assignedToId}`, {
+      Logger.claim.created(`Claim ${(newClaim as any).claimId} created and assigned to insurer ${(newClaim as any).assignedToId}`, {
         claimId: newClaim.id,
         claimIdFormatted: (newClaim as any).claimId,
         farmerId,
@@ -221,43 +222,43 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
         hasAssignedTo: !!(newClaim as any).assignedTo,
       });
     } catch (claimError: any) {
-      Logger.error('Error creating claim in service', { 
-        error: claimError.message, 
+      Logger.error('Error creating claim in service', {
+        error: claimError.message,
         stack: claimError.stack,
         farmerId,
         policyId,
-        userId: req.userId 
+        userId: req.userId
       });
-      
+
       // Mark idempotency as failed
       if (idempotencyKey) {
         await IdempotencyService.markFailed(idempotencyKey, claimError.message);
       }
-      
+
       // Re-throw to be caught by outer catch block
       throw claimError;
     }
 
-      Logger.claim.created(`Claim ${(newClaim as any).claimId} successfully created and returned to farmer`, {
-        claimId: newClaim.id,
-        claimIdFormatted: (newClaim as any).claimId,
-        farmerId,
-        assignedToId: (newClaim as any).assignedToId,
-        amountClaimed: (newClaim as any).amountClaimed
-      });
+    Logger.claim.created(`Claim ${(newClaim as any).claimId} successfully created and returned to farmer`, {
+      claimId: newClaim.id,
+      claimIdFormatted: (newClaim as any).claimId,
+      farmerId,
+      assignedToId: (newClaim as any).assignedToId,
+      amountClaimed: (newClaim as any).amountClaimed
+    });
 
-      res.status(201).json({ 
-        message: 'Claim submitted successfully', 
-        claim: newClaim 
-      });
+    res.status(201).json({
+      message: 'Claim submitted successfully',
+      claim: newClaim
+    });
   } catch (error: any) {
-    Logger.error('Claim submission error', { 
-      error: error.message, 
+    Logger.error('Claim submission error', {
+      error: error.message,
       stack: error.stack,
       userId: req.userId,
-      policyId: req.body?.policyId 
+      policyId: req.body?.policyId
     });
-    
+
     // Mark idempotency as failed
     const idempotencyKey = req.headers['idempotency-key'] as string;
     if (idempotencyKey) {
@@ -265,27 +266,27 @@ router.post('/claims', authenticateToken, authorizeRoles(['FARMER']), (req: any,
     }
 
     if (error.name === 'ValidationError') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: `Claim validation failed: ${error.message}` 
+        message: `Claim validation failed: ${error.message}`
       });
     }
 
     // Return user-friendly error messages
-    if (error.message.includes('Policy does not have an assigned service provider')) {
-      return res.status(400).json({ 
-        message: 'The selected policy does not have an assigned insurance company. Please contact support.' 
+    if (error.message.includes('Policy does not have an assigned insurer')) {
+      return res.status(400).json({
+        message: 'The selected policy does not have an assigned insurance company. Please contact support.'
       });
     }
 
-    if (error.message.includes('Service provider') && error.message.includes('not found')) {
-      return res.status(500).json({ 
-        message: 'Unable to assign claim to insurance company. Please contact support.' 
+    if (error.message.includes('Insurer') && error.message.includes('not found')) {
+      return res.status(500).json({
+        message: 'Unable to assign claim to insurance company. Please contact support.'
       });
     }
 
-    return res.status(500).json({ 
-      message: error.message || 'Failed to submit claim. Please try again or contact support.' 
+    return res.status(500).json({
+      message: error.message || 'Failed to submit claim. Please try again or contact support.'
     });
   }
 });
@@ -299,13 +300,13 @@ router.get('/claims/my-claims', authenticateToken, authorizeRoles(['FARMER']), a
     }
     const farmerId = req.userId;
     const claims = await claimService.getMyClaims(farmerId!);
-    
+
     Logger.claim.created(`Farmer ${farmerId} fetched ${claims.length} claims`, {
       farmerId,
       claimCount: claims.length,
       claimIds: claims.map((c: any) => c.claimId || c.id),
     });
-    
+
     res.json(claims);
   } catch (error: any) {
     Logger.error('Error in my-claims route', { error: error.message, stack: error.stack, userId: req.userId });
@@ -331,7 +332,7 @@ router.get('/claims/farmer/:id', authenticateToken, authorizeRoles(['FARMER']), 
     if (claim.farmerId !== farmerId) {
       return res.status(403).json({ message: 'Access denied: This claim does not belong to you' });
     }
-    
+
     res.json(claim);
   } catch (error) {
     Logger.error('Error fetching farmer claim', { error, claimId: req.params.id, userId: req.userId });
@@ -339,8 +340,8 @@ router.get('/claims/farmer/:id', authenticateToken, authorizeRoles(['FARMER']), 
   }
 });
 
-// Get all claims with pagination, search, filter, and sort (Admin and Service Provider only)
-router.get('/claims', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Get all claims with pagination, search, filter, and sort (Admin and Insurer only)
+router.get('/claims', authenticateToken, authorizeRoles(['ADMIN', 'INSURER']), async (req: AuthRequest, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -362,15 +363,18 @@ router.get('/claims', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_PROVI
       query.status = req.query.status;
     }
 
-    // RULE: SP should only see claims routed to them
-    // Enforce SP scoping: Service Providers only see claims assigned to them
-    if (req.role === 'SERVICE_PROVIDER') {
-      const sp = await prisma.serviceProvider.findUnique({ where: { userId: req.userId! } });
-      if (!sp) {
-        return res.status(404).json({ message: 'Service Provider not found' });
+    // RULE: Insurer should only see claims routed to them
+    // Enforce Insurer scoping: Insurers only see claims assigned to them
+    if (req.role === 'INSURER') {
+      const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId! } });
+      if (!insurer) {
+        return res.status(404).json({ message: 'Insurer not found' });
       }
-      // SP only sees claims assigned to them
-      query.assignedToId = sp.id;
+      // Insurer only sees claims assigned to them AND forwarded by Admin
+      query.assignedToId = insurer.id;
+      query.verificationStatus = {
+        in: [VerificationStatus.AI_Satellite_Processed, VerificationStatus.Verified]
+      };
     } else if (req.query.assignedTo) {
       query.assignedToId = req.query.assignedTo;
     }
@@ -402,19 +406,19 @@ router.get('/claims', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_PROVI
   }
 });
 
-// Get a single claim by ID (Admin and Service Provider only)
-router.get('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Get a single claim by ID (Admin and Insurer only)
+router.get('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'INSURER']), async (req: AuthRequest, res) => {
   try {
     const claim = await claimService.getClaimById(req.params.id);
     if (!claim) {
       return res.status(404).json({ message: 'Claim not found' });
     }
 
-    // RULE: SP should only see claims routed to them
-    // If SP, ensure the claim is assigned to them
-    if (req.role === 'SERVICE_PROVIDER') {
-      const sp = await prisma.serviceProvider.findUnique({ where: { userId: req.userId! } });
-      if (!sp || claim.assignedToId !== sp.id) {
+    // RULE: Insurer should only see claims routed to them
+    // If Insurer, ensure the claim is assigned to them
+    if (req.role === 'INSURER') {
+      const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId! } });
+      if (!insurer || claim.assignedToId !== insurer.id) {
         return res.status(403).json({ message: 'Access denied: You can only view claims assigned to you' });
       }
     }
@@ -425,8 +429,8 @@ router.get('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_P
   }
 });
 
-// Update claim status and resolution details (Admin and Service Provider only)
-router.put('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Update claim status and resolution details (Admin and Insurer only)
+router.put('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'INSURER']), async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { status, resolutionDetails, assignedTo, adminOverrideReason, reassignTo } = req.body;
   const isAdmin = req.role === 'ADMIN' || req.role === 'SUPER_ADMIN';
@@ -439,11 +443,11 @@ router.put('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_P
 
     // Admin override: Store override reason and timestamp
     const updateData: any = { status, resolutionDetails, assignedToId: assignedTo || reassignTo };
-    
+
     if (isAdmin && adminOverrideReason) {
       updateData.adminOverrideReason = adminOverrideReason;
       updateData.adminOverrideAt = new Date();
-      
+
       // Log admin override
       await auditLogService.logAdminOverride(
         req.userId!,
@@ -478,20 +482,20 @@ router.put('/claims/:id', authenticateToken, authorizeRoles(['ADMIN', 'SERVICE_P
   }
 });
 
-// SP: Get claims assigned to me with documents
-router.get('/sp/claims', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Insurer: Get claims assigned to me with documents
+router.get('/insurer/claims', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const sp = await prisma.serviceProvider.findUnique({ where: { userId: req.userId } });
-    if (!sp) {
-      return res.status(404).json({ message: 'Service Provider not found' });
+    const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId } });
+    if (!insurer) {
+      return res.status(404).json({ message: 'Insurer not found' });
     }
 
     const claims = await prisma.claim.findMany({
-      where: { assignedToId: sp.id },
+      where: { assignedToId: insurer.id },
       include: {
         farmer: { select: { name: true, email: true, mobileNumber: true } },
         policy: { select: { policyNumber: true, cropType: true } },
@@ -553,19 +557,19 @@ router.get('/claims/:claimId/files/:fileType/:fileIndex', authenticateToken, asy
       return res.status(404).json({ message: 'Claim not found' });
     }
 
-    // Check permissions: farmer owns it, SP assigned to it, or admin
+    // Check permissions: farmer owns it, Insurer assigned to it, or admin
     const isFarmer = req.role === 'FARMER' && claim.farmerId === req.userId;
-    const isSP = req.role === 'SERVICE_PROVIDER' && claim.assignedTo?.user?.id === req.userId;
+    const isInsurer = req.role === 'INSURER' && claim.assignedTo?.user?.id === req.userId;
     const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.role || '');
 
-    if (!isFarmer && !isSP && !isAdmin) {
+    if (!isFarmer && !isInsurer && !isAdmin) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     // Get files from ClaimDocument records filtered by kind
     const fileKind = fileType === 'images' ? 'image' : 'document';
     const claimDocuments = claim.documents.filter(doc => doc.kind === fileKind);
-    
+
     if (index >= claimDocuments.length) {
       return res.status(404).json({ message: 'File not found' });
     }

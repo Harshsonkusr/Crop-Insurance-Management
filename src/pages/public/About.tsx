@@ -37,10 +37,10 @@ const About = () => {
                 ClaimEasy was founded with a vision to transform agricultural insurance. Recognizing the challenges farmers face with traditional claim processes, we developed a smart and efficient platform that leverages Artificial Intelligence (AI) and satellite image verification.
               </p>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                Our innovative approach ensures claims are processed quickly and accurately, acting as a transparent mediator between farmers and service providers. By automating verification and reducing manual intervention, ClaimEasy minimizes delays and detects genuine claims with unparalleled precision.
+                Our innovative approach ensures claims are processed quickly and accurately, acting as a transparent mediator between farmers and insurers. By automating verification and reducing manual intervention, ClaimEasy minimizes delays and detects genuine claims with unparalleled precision.
               </p>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                We are committed to fostering transparency and trust, ensuring farmers receive their rightful compensation swiftly, and empowering service providers with advanced tools to combat fraud and streamline operations.
+                We are committed to fostering transparency and trust, ensuring farmers receive their rightful compensation swiftly, and empowering insurers with advanced tools to combat fraud and streamline operations.
               </p>
             </div>
             <div className="animate-fade-in">

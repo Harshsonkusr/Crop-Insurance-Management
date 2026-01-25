@@ -20,7 +20,7 @@ class FrontendLogger {
 
   private log(level: LogLevel, category: string, message: string, meta?: LogMeta) {
     const logMessage = this.formatLog(level, category, message, meta);
-    
+
     // Always log to console in development
     if (this.isDevelopment) {
       const colors: Record<LogLevel, string> = {
@@ -66,15 +66,16 @@ class FrontendLogger {
     error: (message: string, meta?: LogMeta) => this.log('error', 'FARMER', message, meta),
   };
 
-  // Service Provider Operations
-  sp = {
-    login: (message: string, meta?: LogMeta) => this.log('info', 'SP', `LOGIN: ${message}`, meta),
-    view: (message: string, meta?: LogMeta) => this.log('info', 'SP', `VIEW: ${message}`, meta),
-    policy: (message: string, meta?: LogMeta) => this.log('info', 'SP', `POLICY: ${message}`, meta),
-    claim: (message: string, meta?: LogMeta) => this.log('info', 'SP', `CLAIM: ${message}`, meta),
-    approve: (message: string, meta?: LogMeta) => this.log('info', 'SP', `APPROVE: ${message}`, meta),
-    reject: (message: string, meta?: LogMeta) => this.log('warn', 'SP', `REJECT: ${message}`, meta),
-    error: (message: string, meta?: LogMeta) => this.log('error', 'SP', message, meta),
+  // Insurer Operations
+  // Insurer Operations
+  insurer = {
+    login: (message: string, meta?: LogMeta) => this.log('info', 'INSURER', `LOGIN: ${message}`, meta),
+    view: (message: string, meta?: LogMeta) => this.log('info', 'INSURER', `VIEW: ${message}`, meta),
+    policy: (message: string, meta?: LogMeta) => this.log('info', 'INSURER', `POLICY: ${message}`, meta),
+    claim: (message: string, meta?: LogMeta) => this.log('info', 'INSURER', `CLAIM: ${message}`, meta),
+    approve: (message: string, meta?: LogMeta) => this.log('info', 'INSURER', `APPROVE: ${message}`, meta),
+    reject: (message: string, meta?: LogMeta) => this.log('warn', 'INSURER', `REJECT: ${message}`, meta),
+    error: (message: string, meta?: LogMeta) => this.log('error', 'INSURER', message, meta),
   };
 
   // Policy Request Operations

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { 
+import {
   ArrowLeft,
   FileText,
   Calendar,
@@ -37,11 +37,28 @@ interface PolicyDetails {
   status: string;
   insuredArea?: number;
   farmerId?: any;
-  serviceProviderId?: any;
+  insurerId?: any;
+  cropDetails?: {
+    cropVariety?: string;
+    cultivationSeason?: string;
+    expectedYield?: number;
+    sowingDate?: string;
+    soilType?: string;
+    irrigationMethod?: string;
+    surveyNumber?: string;
+    khewatNumber?: string;
+    insuranceUnit?: string;
+    wildAnimalAttackCoverage?: boolean;
+    bankName?: string;
+    bankAccountNo?: string;
+    bankIfsc?: string;
+    cropDescription?: string;
+  };
 }
 
 interface ClaimDetails {
   _id: string;
+  id?: string;
   claimId: string;
   policyId?: {
     _id: string;
@@ -64,8 +81,28 @@ interface ClaimDetails {
   resolutionDate?: string;
 }
 
+interface PolicyRequestDetails {
+  id: string;
+  _id?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'issued';
+  cropType: string;
+  insuredArea: number;
+  requestedStartDate?: string;
+  createdAt: string;
+  farmerId: string | any;
+  insurerId?: string | any;
+  insurer?: {
+    name: string;
+    email: string;
+  };
+  cropDetails?: any;
+  farmImages?: any;
+  documents?: any;
+  rejectionReason?: string;
+}
+
 type FarmerViewDetailsParams = {
-  type: 'policy' | 'claim';
+  type: 'policy' | 'claim' | 'policy-request';
   id: string;
 };
 
@@ -74,7 +111,7 @@ const FarmerViewDetails: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [details, setDetails] = useState<PolicyDetails | ClaimDetails | null>(null);
+  const [details, setDetails] = useState<PolicyDetails | ClaimDetails | PolicyRequestDetails | null>(null);
 
   useEffect(() => {
     if (type && id) {
@@ -93,6 +130,9 @@ const FarmerViewDetails: React.FC = () => {
       } else if (type === 'claim') {
         response = await api.get(`/claims/farmer/${id}`);
         setDetails(response.data as ClaimDetails);
+      } else if (type === 'policy-request') {
+        response = await api.get(`/policy-requests/${id}`);
+        setDetails(response.data as PolicyRequestDetails);
       }
     } catch (err: any) {
       console.error(`Error fetching ${type} details:`, err);
@@ -116,8 +156,8 @@ const FarmerViewDetails: React.FC = () => {
       'rejected': { label: 'Rejected', variant: 'destructive', icon: XCircle },
     };
 
-    const config = statusConfig[status.toLowerCase()] || { 
-      label: status, 
+    const config = statusConfig[status.toLowerCase()] || {
+      label: status,
       variant: 'outline' as const,
       icon: AlertCircle
     };
@@ -207,12 +247,14 @@ const FarmerViewDetails: React.FC = () => {
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {type === 'policy' 
+            {type === 'policy'
               ? `Policy: ${(details as PolicyDetails).policyNumber}`
-              : `Claim: ${(details as ClaimDetails).claimId || `#${(details as ClaimDetails)._id.slice(-8)}`}`}
+              : type === 'claim'
+                ? `Claim: ${(details as ClaimDetails).claimId || `#${((details as ClaimDetails).id || (details as ClaimDetails)._id).slice(-8)}`}`
+                : `Request: #${((details as PolicyRequestDetails).id || (details as PolicyRequestDetails)._id)?.slice(-8).toUpperCase() || 'N/A'}`}
           </h1>
           <p className="text-gray-600">
-            {type === 'policy' ? 'View complete policy information' : 'View complete claim details and status'}
+            {type === 'policy' ? 'View complete policy information' : type === 'claim' ? 'View complete claim details and status' : 'Track status of your insurance application'}
           </p>
         </div>
         {getStatusBadge((details as any).status)}
@@ -255,6 +297,22 @@ const FarmerViewDetails: React.FC = () => {
                       <Label className="text-sm text-gray-500">Insured Area</Label>
                       <p className="text-lg font-semibold text-gray-900">
                         {(details as PolicyDetails).insuredArea} acres
+                      </p>
+                    </div>
+                  )}
+                  {(details as PolicyDetails).cropDetails?.cropVariety && (
+                    <div>
+                      <Label className="text-sm text-gray-500">Crop Variety</Label>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {(details as PolicyDetails).cropDetails?.cropVariety}
+                      </p>
+                    </div>
+                  )}
+                  {(details as PolicyDetails).cropDetails?.cultivationSeason && (
+                    <div>
+                      <Label className="text-sm text-gray-500">Cultivation Season</Label>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {(details as PolicyDetails).cropDetails?.cultivationSeason}
                       </p>
                     </div>
                   )}
@@ -316,30 +374,90 @@ const FarmerViewDetails: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="coverage">
-            <Card>
-              <CardHeader>
-                <CardTitle>Coverage Information</CardTitle>
-                <CardDescription>Detailed coverage terms and conditions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h3 className="font-semibold text-blue-900 mb-2">Coverage Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Land & Crop Records</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-gray-500">Survey/Khasra</Label>
+                      <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.surveyNumber || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Khewat/Khatauni</Label>
+                      <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.khewatNumber || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Insurance Unit</Label>
+                      <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.insuranceUnit || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Soil Type</Label>
+                      <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.soilType || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Irrigation</Label>
+                      <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.irrigationMethod || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Yield Expectation</Label>
+                      <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.expectedYield || 'N/A'} tons/acre</p>
+                    </div>
+                  </div>
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Wild Animal Coverage</span>
+                      <Badge variant={(details as PolicyDetails).cropDetails?.wildAnimalAttackCoverage ? "default" : "secondary"}>
+                        {(details as PolicyDetails).cropDetails?.wildAnimalAttackCoverage ? "Enabled" : "Not Covered"}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Bank Information (DBT)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-xs text-gray-500">Bank Name</Label>
+                    <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.bankName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Account Number</Label>
+                    <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.bankAccountNo || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">IFSC Code</Label>
+                    <p className="font-medium text-gray-900">{(details as PolicyDetails).cropDetails?.bankIfsc || 'N/A'}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-lg">Policy Document</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
                     <p className="text-sm text-blue-700">
-                      This policy provides comprehensive coverage for {((details as PolicyDetails).cropType).toLowerCase()} crops 
-                      with a sum insured of {formatCurrency((details as PolicyDetails).sumInsured)}. 
-                      Coverage is valid from {formatDate((details as PolicyDetails).startDate)} to {formatDate((details as PolicyDetails).endDate)}.
+                      This policy is verified and compliant with PMFBY 2026 standards. You can download the digital copy for your records.
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => alert('Downloading policy document...')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Policy
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  <Button variant="outline" className="w-full md:w-auto" onClick={() => {
+                    import('../../utils/download').then(({ downloadJSON }) => {
+                      downloadJSON(details, `Policy_${(details as PolicyDetails).policyNumber}`);
+                    });
+                  }}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Policy PDF
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       )}
@@ -600,6 +718,238 @@ const FarmerViewDetails: React.FC = () => {
         </Tabs>
       )}
 
+      {/* Policy Request Details */}
+      {type === 'policy-request' && (
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="crop">Crop & Land</TabsTrigger>
+            <TabsTrigger value="documents">Submitted Documents</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Request Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-sm text-gray-500">Request ID</Label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      #{((details as PolicyRequestDetails).id || (details as PolicyRequestDetails)._id)?.slice(-8).toUpperCase()}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Insurer</Label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {(details as PolicyRequestDetails).insurer?.name || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Crop Type</Label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {(details as PolicyRequestDetails).cropType}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Insured Area</Label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {(details as PolicyRequestDetails).insuredArea} Hectares
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Status</Label>
+                    <div className="mt-1">
+                      {getStatusBadge((details as PolicyRequestDetails).status)}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Timeline
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-sm text-gray-500">Requested Date</Label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {formatDate((details as PolicyRequestDetails).createdAt)}
+                    </p>
+                  </div>
+                  {(details as PolicyRequestDetails).requestedStartDate && (
+                    <div>
+                      <Label className="text-sm text-gray-500">Requested Start Date</Label>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {formatDate((details as PolicyRequestDetails).requestedStartDate!)}
+                      </p>
+                    </div>
+                  )}
+                  {(details as PolicyRequestDetails).status === 'rejected' && (
+                    <div className="p-3 bg-red-50 border border-red-100 rounded-md">
+                      <Label className="text-sm text-red-700 font-bold">Rejection Reason</Label>
+                      <p className="text-sm text-red-600 mt-1">
+                        {(details as PolicyRequestDetails).rejectionReason || 'No reason provided'}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="crop">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Crop Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-gray-500">Name</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.cropName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Variety</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.cropVariety || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Season</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.cultivationSeason || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Sowing Date</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.sowingDate ? formatDate((details as PolicyRequestDetails).cropDetails.sowingDate) : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Yield Exp.</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.expectedYield || 'N/A'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Land Records</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-gray-500">Survey/Khasra</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.surveyNumber || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Khewat</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.khewatNumber || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Insurance Unit</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.insuranceUnit || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Soil Type</Label>
+                      <p className="font-medium">{(details as PolicyRequestDetails).cropDetails?.soilType || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Wild Animal Coverage</span>
+                      <Badge variant={(details as PolicyRequestDetails).cropDetails?.wildAnimalAttackCoverage ? "default" : "secondary"}>
+                        {(details as PolicyRequestDetails).cropDetails?.wildAnimalAttackCoverage ? "Requested" : "Not Requested"}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="documents">
+            <Card>
+              <CardHeader>
+                <CardTitle>Evidence & Documents</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(details as PolicyRequestDetails).farmImages && (details as PolicyRequestDetails).farmImages.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="font-semibold mb-3">Farm Images</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {(details as PolicyRequestDetails).farmImages.map((img: any, idx: number) => {
+                        // Use api endpoint to fetch image
+                        const detailId = (details as PolicyRequestDetails).id || (details as PolicyRequestDetails)._id;
+                        const imageUrl = `${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000'}/api/policy-requests/${detailId}/farm-images/${idx}`;
+                        return (
+                          <div key={idx} className="relative group border rounded-lg overflow-hidden h-32 bg-gray-100">
+                            <img
+                              src={imageUrl}
+                              alt={`Farm ${idx}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x200?text=Image+Load+Error';
+                              }}
+                            />
+                            <a
+                              href={imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Eye className="h-6 w-6 text-white" />
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {(details as PolicyRequestDetails).documents && (details as PolicyRequestDetails).documents.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3">Submitted Documents</h3>
+                    <div className="space-y-2">
+                      {(details as PolicyRequestDetails).documents.map((doc: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-gray-500" />
+                            <span className="text-sm font-medium truncate">{doc.fileName || `Document ${idx + 1}`}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-800"
+                            onClick={() => {
+                              const detailId = (details as PolicyRequestDetails).id || (details as PolicyRequestDetails)._id;
+                              window.open(`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000'}/api/policy-requests/${detailId}/documents/${idx}`, '_blank');
+                            }}
+                          >
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!(details as PolicyRequestDetails).documents?.length && !(details as PolicyRequestDetails).farmImages?.length) && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No documents or images submitted.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
+
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" onClick={() => navigate(-1)}>
@@ -617,7 +967,7 @@ const FarmerViewDetails: React.FC = () => {
         )}
         <Button variant="outline" onClick={() => alert('Downloading...')}>
           <Download className="h-4 w-4 mr-2" />
-          Download {type === 'policy' ? 'Policy' : 'Claim'} Details
+          Download {type === 'policy' ? 'Policy' : type === 'claim' ? 'Claim' : 'Request'} Details
         </Button>
       </div>
     </div>

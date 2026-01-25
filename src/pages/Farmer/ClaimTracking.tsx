@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Search, 
-  Filter, 
-  PlusCircle, 
-  Eye, 
+import {
+  Search,
+  Filter,
+  PlusCircle,
+  Eye,
   Calendar,
   MapPin,
   IndianRupee,
@@ -114,7 +114,7 @@ const ClaimTracking: React.FC = () => {
 
     // Filter by status
     if (filterStatus !== 'All') {
-      filtered = filtered.filter(claim => 
+      filtered = filtered.filter(claim =>
         claim.status.toLowerCase() === filterStatus.toLowerCase()
       );
     }
@@ -124,8 +124,8 @@ const ClaimTracking: React.FC = () => {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(claim =>
         claim.claimId?.toLowerCase().includes(query) ||
-        (claim.policy?.policyNumber || (typeof claim.policyId === 'object' ? claim.policyId?.policyNumber : '') || '').toLowerCase().includes(query) ||
-        claim.policyId?.cropType?.toLowerCase().includes(query) ||
+        (claim.policy?.policyNumber || (typeof claim.policyId === 'object' ? (claim.policyId as any)?.policyNumber : '') || '').toLowerCase().includes(query) ||
+        (claim.policy?.cropType || (typeof claim.policyId === 'object' ? (claim.policyId as any)?.cropType : '') || '').toLowerCase().includes(query) ||
         claim.description?.toLowerCase().includes(query)
       );
     }
@@ -144,8 +144,8 @@ const ClaimTracking: React.FC = () => {
       'rejected': { label: 'Rejected', variant: 'destructive', icon: XCircle },
     };
 
-    const config = statusConfig[status.toLowerCase()] || { 
-      label: status, 
+    const config = statusConfig[status.toLowerCase()] || {
+      label: status,
       variant: 'outline' as const,
       icon: AlertCircle
     };
@@ -238,7 +238,7 @@ const ClaimTracking: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Claims List */}
+      {/* Claims List - Professional Table */}
       {error ? (
         <Card>
           <CardContent className="p-6 text-center">
@@ -270,90 +270,89 @@ const ClaimTracking: React.FC = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClaims.map((claim) => {
             const claimId = claim.id || claim._id || '';
+            const policyNumber = claim.policy?.policyNumber || (typeof claim.policyId === 'object' ? claim.policyId?.policyNumber : 'N/A') || 'N/A';
+            const cropType = claim.policy?.cropType || (typeof claim.policyId === 'object' ? claim.policyId?.cropType : 'N/A') || 'N/A';
+
             return (
-            <Card
-              key={claimId}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => navigate(`/farmer-dashboard/view-details/claim/${claimId}`)}
-            >
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="text-lg font-bold text-gray-900">
-                        {claim.claimId || `Claim #${(claim.id || claim._id || '').slice(-8)}`}
-                      </h3>
-                      {getStatusBadge(claim.status)}
-                      {claim.verificationStatus && (
-                        <Badge variant="outline" className="flex items-center gap-1">
-                          <Zap className="h-3 w-3 text-yellow-500" />
-                          {claim.verificationStatus}
-                        </Badge>
+              <Card key={claimId} className={`overflow-hidden hover:shadow-xl transition-all duration-300 border-t-4 ${claim.status.toLowerCase() === 'approved' ? 'border-t-green-500' :
+                claim.status.toLowerCase() === 'rejected' ? 'border-t-red-500' :
+                  ['pending', 'submitted'].includes(claim.status.toLowerCase()) ? 'border-t-yellow-500' : 'border-t-blue-500'
+                }`}>
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Claim ID</span>
+                      <span className="font-bold text-gray-900">{claim.claimId || `#${claimId.slice(-8)}`}</span>
+                    </div>
+                    {getStatusBadge(claim.status)}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Linked Policy</span>
+                    <span className="text-xs font-semibold text-blue-600 flex items-center gap-1">
+                      <FileText className="h-3 w-3" />
+                      {policyNumber}
+                    </span>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4 pt-2">
+                  <div className="flex items-center gap-3 py-3 border-y border-gray-50">
+                    <div className="p-2 bg-green-50 rounded-lg">
+                      <Zap className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-900">{cropType}</span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-tight">Affected Crop</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block">Claimed Amount</span>
+                      <div className="flex items-center gap-1 text-green-700 font-bold text-sm">
+                        <IndianRupee className="h-3 w-3" />
+                        {claim.amountClaimed?.toLocaleString('en-IN') || '0'}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block">Incident Date</span>
+                      <div className="flex items-center gap-1 text-gray-600 text-xs">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(claim.dateOfIncident || claim.dateOfClaim)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {claim.verificationStatus && (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-[10px] bg-yellow-50 text-yellow-700 p-2 rounded border border-yellow-100">
+                        <AlertCircle className="h-3 w-3" />
+                        <span className="font-medium">Status: {claim.verificationStatus}</span>
+                      </div>
+                      {(claim as any).aiDamagePercent !== undefined && (claim as any).aiDamagePercent !== null && (
+                        <div className="flex items-center justify-between gap-2 text-[10px] bg-purple-50 text-purple-700 p-2 rounded border border-purple-100">
+                          <div className="flex items-center gap-1">
+                            <Zap className="h-3 w-3" />
+                            <span className="font-bold">Satellite AI Assessment</span>
+                          </div>
+                          <span className="font-extrabold">{(claim as any).aiDamagePercent}% Damage</span>
+                        </div>
                       )}
                     </div>
+                  )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <FileText className="h-4 w-4" />
-                        <span>
-                          <span className="font-medium">Policy:</span>{' '}
-                          {claim.policy?.policyNumber || (typeof claim.policyId === 'object' ? claim.policyId?.policyNumber : 'N/A') || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Calendar className="h-4 w-4" />
-                        <span>
-                          <span className="font-medium">Incident:</span>{' '}
-                          {formatDate(claim.dateOfIncident || claim.dateOfClaim)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <MapPin className="h-4 w-4" />
-                        <span className="truncate">
-                          {claim.locationOfIncident || 'Location not provided'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <IndianRupee className="h-4 w-4" />
-                        <span>
-                          <span className="font-medium">Amount:</span>{' '}
-                          {formatCurrency(claim.amountClaimed)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {claim.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {claim.description}
-                      </p>
-                    )}
-
-                    {claim.policyId?.cropType && (
-                      <div>
-                        <Badge variant="outline">{claim.policyId.cropType}</Badge>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/farmer-dashboard/view-details/claim/${claimId}`);
-                      }}
-                      className="flex items-center gap-2"
-                    >
-                      View Details
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700 text-xs h-9 mt-2"
+                    onClick={() => navigate(`/farmer-dashboard/view-details/claim/${claimId}`)}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-2" />
+                    View Details
+                  </Button>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

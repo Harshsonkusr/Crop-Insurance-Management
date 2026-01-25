@@ -58,14 +58,14 @@ const AdminPendingRegistrations = () => {
   };
 
   const handleApprove = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to approve this Service Provider registration?')) {
+    if (!window.confirm('Are you sure you want to approve this Insurer registration?')) {
       return;
     }
 
     setProcessingId(userId);
     try {
       await api.put(`/admin/users/${userId}/approve`, { approved: true });
-      alert('Service Provider approved successfully!');
+      alert('Insurer approved successfully!');
       fetchPendingUsers();
     } catch (err: any) {
       console.error('Error approving user:', err);
@@ -85,11 +85,11 @@ const AdminPendingRegistrations = () => {
     const userId = pendingRejectId;
     setProcessingId(userId);
     try {
-      await api.put(`/admin/users/${userId}/approve`, { 
+      await api.put(`/admin/users/${userId}/approve`, {
         approved: false,
         rejectionReason: rejectReason.trim() || 'Registration rejected by administrator'
       });
-      alert('Service Provider registration rejected.');
+      alert('Insurer registration rejected.');
       fetchPendingUsers();
     } catch (err: any) {
       console.error('Error rejecting user:', err);
@@ -116,122 +116,133 @@ const AdminPendingRegistrations = () => {
   return (
     <React.Fragment>
       <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Pending Registrations
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Review and approve Service Provider registrations
-          </p>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-blue-900 tracking-tight">Security Clearing House</h1>
+            <p className="text-gray-500 mt-1 font-medium italic">High-precision vetting of corporate entity credentials for ecosystem access.</p>
+          </div>
+          <Link
+            to="/admin-dashboard/insurers"
+            className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Back to Insurers
+          </Link>
         </div>
-        <Link
-          to="/admin-dashboard/service-providers"
-          className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          Back to Service Providers
-        </Link>
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        {/* Pending Users List - Standardized Table */}
+        {pendingUsers.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg font-medium">No pending registrations</p>
+              <p className="text-gray-500 mt-2">
+                All Insurer registrations have been processed.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="overflow-hidden border-none shadow-lg">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-amber-600 border-b border-amber-700">
+                    <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Insurer / Contact</th>
+                    <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Business Details</th>
+                    <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Registered On</th>
+                    <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Status</th>
+                    <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 bg-white/40">
+                  {pendingUsers.map((user) => (
+                    <tr key={user._id} className="hover:bg-amber-50/50 transition-all group border-l-4 border-transparent hover:border-amber-500">
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold border border-amber-200 shadow-sm group-hover:scale-110 transition-transform">
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-gray-900">{user.name}</span>
+                            <div className="flex flex-col gap-0.5 mt-1">
+                              {user.email && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                  <Mail className="h-3 w-3" />
+                                  <span>{user.email}</span>
+                                </div>
+                              )}
+                              {user.mobileNumber && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                  <Smartphone className="h-3 w-3" />
+                                  <span>{user.mobileNumber}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-900">{user.businessName || 'No Business Name'}</p>
+                          <p className="text-xs text-gray-500 truncate max-w-[200px]" title={user.address}>
+                            {user.address || 'No Address Provided'}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          <span>{new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                          Pending
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            onClick={() => handleApprove(user._id)}
+                            disabled={processingId === user._id}
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 h-8 px-3 text-[11px] font-bold uppercase tracking-tight"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                            {processingId === user._id ? '...' : 'Approve'}
+                          </Button>
+                          <Button
+                            onClick={() => handleReject(user._id)}
+                            disabled={processingId === user._id}
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 px-3 text-[11px] font-bold uppercase tracking-tight"
+                          >
+                            <XCircle className="h-3.5 w-3.5 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
-
-      {/* Error State */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">{error}</p>
-        </div>
-      )}
-
-      {/* Pending Users List */}
-      {pendingUsers.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-            <p className="text-gray-600 text-lg font-medium">No pending registrations</p>
-            <p className="text-gray-500 mt-2">
-              All Service Provider registrations have been processed.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {pendingUsers.map((user) => (
-            <Card key={user._id} className="border-yellow-200">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                      <User className="h-6 w-6 text-yellow-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{user.name}</CardTitle>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Registered {new Date(user.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className="bg-yellow-100 text-yellow-800">
-                    <Clock className="h-3 w-3 mr-1" />
-                    Pending Approval
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  {user.email && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Mail className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{user.email}</span>
-                    </div>
-                  )}
-                  {user.mobileNumber && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Smartphone className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{user.mobileNumber}</span>
-                    </div>
-                  )}
-                  {user.businessName && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">Business: </span>
-                      <span className="text-gray-900 font-medium">{user.businessName}</span>
-                    </div>
-                  )}
-                </div>
-                {user.address && (
-                  <div className="mb-4 text-sm">
-                    <span className="text-gray-500">Address: </span>
-                    <span className="text-gray-900">{user.address}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-3 pt-4 border-t">
-                  <Button
-                    onClick={() => handleApprove(user._id)}
-                    disabled={processingId === user._id}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    {processingId === user._id ? 'Processing...' : 'Approve'}
-                  </Button>
-                  <Button
-                    onClick={() => handleReject(user._id)}
-                    disabled={processingId === user._id}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Reject
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
 
       <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reject Service Provider</AlertDialogTitle>
+            <AlertDialogTitle>Reject Insurer</AlertDialogTitle>
             <AlertDialogDescription>
               Optionally provide a reason for rejection. This will be stored with the request.
             </AlertDialogDescription>

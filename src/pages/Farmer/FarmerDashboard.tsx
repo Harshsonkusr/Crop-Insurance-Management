@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Shield, 
-  MapPin, 
-  Settings, 
-  HelpCircle, 
+import {
+  LayoutDashboard,
+  FileText,
+  Shield,
+  MapPin,
+  Settings,
+  HelpCircle,
   BookOpen,
   PlusCircle,
   Bell,
@@ -73,7 +73,7 @@ const FarmerDashboard = () => {
       try {
         const response = await api.get('/claims/my-claims');
         const claims = Array.isArray(response.data) ? response.data : [];
-        const pending = claims.filter((c: any) => 
+        const pending = claims.filter((c: any) =>
           c.status === 'pending' || c.status === 'under_review' || c.status === 'submitted'
         ).length;
         setPendingClaimsCount(pending);
@@ -85,21 +85,21 @@ const FarmerDashboard = () => {
   }, []);
 
   const navLinks = [
-    { 
-      name: 'Dashboard', 
-      path: '/farmer-dashboard/overview', 
+    {
+      name: 'Dashboard',
+      path: '/farmer-dashboard/overview',
       icon: <LayoutDashboard className="h-5 w-5" />,
       exact: true
     },
-    { 
-      name: 'Submit Claim', 
-      path: '/farmer-dashboard/submit-claim', 
+    {
+      name: 'Submit Claim',
+      path: '/farmer-dashboard/submit-claim',
       icon: <PlusCircle className="h-5 w-5" />,
       highlight: true
     },
-    { 
-      name: 'My Claims', 
-      path: '/farmer-dashboard/my-claims', 
+    {
+      name: 'My Claims',
+      path: '/farmer-dashboard/my-claims',
       icon: <FileText className="h-5 w-5" />,
       badge: pendingClaimsCount > 0 ? pendingClaimsCount : undefined
     },
@@ -108,24 +108,19 @@ const FarmerDashboard = () => {
       path: '/farmer-dashboard/my-policies',
       icon: <Shield className="h-5 w-5" />
     },
-    { 
-      name: 'Farm Details', 
-      path: '/farmer-dashboard/farm-details', 
-      icon: <MapPin className="h-5 w-5" />
-    },
-    { 
-      name: 'Resources', 
-      path: '/farmer-dashboard/resources', 
+    {
+      name: 'Resources',
+      path: '/farmer-dashboard/resources',
       icon: <BookOpen className="h-5 w-5" />
     },
-    { 
-      name: 'Support', 
-      path: '/farmer-dashboard/support', 
+    {
+      name: 'Support',
+      path: '/farmer-dashboard/support',
       icon: <HelpCircle className="h-5 w-5" />
     },
-    { 
-      name: 'Settings', 
-      path: '/farmer-dashboard/profile-settings', 
+    {
+      name: 'Settings',
+      path: '/farmer-dashboard/profile-settings',
       icon: <Settings className="h-5 w-5" />
     },
   ];
@@ -181,11 +176,10 @@ const FarmerDashboard = () => {
               <Link
                 key={link.name}
                 to={link.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                  active
-                    ? 'bg-white text-green-700 shadow-md'
-                    : 'text-white/90 hover:bg-white/10 hover:text-white'
-                } ${link.highlight ? 'border-2 border-yellow-400' : ''}`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${active
+                  ? 'bg-white text-green-700 shadow-md'
+                  : 'text-white/90 hover:bg-white/10 hover:text-white'
+                  } ${link.highlight ? 'border-2 border-yellow-400' : ''}`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <span className={active ? 'text-green-700' : 'text-white'}>
@@ -263,7 +257,7 @@ const FarmerDashboard = () => {
               <Logo variant="navbar" className="!bg-transparent" />
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {/* Notification Bell */}
             <button className="p-2 rounded-lg hover:bg-gray-100 relative">
@@ -355,11 +349,10 @@ const FarmerDashboard = () => {
                     <Link
                       key={link.name}
                       to={link.path}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                        active
-                          ? 'bg-white text-green-700'
-                          : 'text-white/90 hover:bg-white/10'
-                      }`}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${active
+                        ? 'bg-white text-green-700'
+                        : 'text-white/90 hover:bg-white/10'
+                        }`}
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       {link.icon}
@@ -401,12 +394,12 @@ const FarmerDashboard = () => {
             </div>
           </div>
         )}
-        
+
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto bg-gray-50">
           <Outlet />
         </main>
-        
+
         {/* Footer */}
         <FarmerDashboardFooter />
       </div>

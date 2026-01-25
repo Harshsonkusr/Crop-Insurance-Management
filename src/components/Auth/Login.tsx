@@ -77,12 +77,12 @@ const Login = () => {
     setSuccess(null);
 
     try {
-      if (role === "ADMIN" || role === "SERVICE_PROVIDER" || role === "SUPER_ADMIN") {
+      if (role === "ADMIN" || role === "INSURER" || role === "SUPER_ADMIN") {
         if (!email || !password) {
           setError("Email and password are required");
           return;
         }
-        const response = await api.post('/auth/login/admin-service-provider', {
+        const response = await api.post('/auth/login/admin-insurer', {
           email,
           password,
         });
@@ -91,8 +91,8 @@ const Login = () => {
         // Navigate after user data is loaded
         if (response.data.user.role === "ADMIN" || response.data.user.role === "SUPER_ADMIN") {
           navigate("/admin-dashboard");
-        } else if (response.data.user.role === "SERVICE_PROVIDER") {
-          navigate("/service-provider-dashboard");
+        } else if (response.data.user.role === "INSURER") {
+          navigate("/insurer-dashboard");
         }
       } else if (role === "FARMER") {
         if (!mobileNumber.trim()) {
@@ -103,7 +103,7 @@ const Login = () => {
           setError("Please enter a valid mobile number");
           return;
         }
-        
+
         if (!otpSent) {
           // Send OTP
           await api.post('/auth/send-otp', { mobileNumber: mobileNumber.trim() });
@@ -205,10 +205,10 @@ const Login = () => {
                         <span>Farmer</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="SERVICE_PROVIDER">
+                    <SelectItem value="INSURER">
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4" />
-                        <span>Service Provider</span>
+                        <span>Insurer</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="ADMIN">
@@ -221,7 +221,7 @@ const Login = () => {
                 </Select>
               </div>
 
-              {role === "ADMIN" || role === "SERVICE_PROVIDER" ? (
+              {role === "ADMIN" || role === "INSURER" ? (
                 <>
                   <div>
                     <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">
@@ -268,7 +268,7 @@ const Login = () => {
                       />
                       <Label htmlFor="remember-me" className="text-gray-600">Remember me</Label>
                     </div>
-                    <Link to="#" className="text-[#1A5319] hover:underline">
+                    <Link to="/forgot-password" className="text-[#1A5319] hover:underline">
                       Forgot password?
                     </Link>
                   </div>
@@ -353,7 +353,7 @@ const Login = () => {
                   type="submit"
                   className="w-full h-12 bg-[#1A5319] hover:bg-[#1A5319]/90 text-white text-lg font-semibold rounded-lg shadow-md"
                 >
-                  {role === "ADMIN" || role === "SERVICE_PROVIDER" ? "LOG IN" : "SEND OTP"}
+                  {role === "ADMIN" || role === "INSURER" ? "LOG IN" : "SEND OTP"}
                 </Button>
               )}
 
@@ -368,16 +368,16 @@ const Login = () => {
                     </p>
                   </div>
                 )}
-                {role === "SERVICE_PROVIDER" && (
+                {role === "INSURER" && (
                   <div className="text-center">
                     <p className="text-sm text-gray-600">
                       Don't have an account?{" "}
-                      <Link to="/signup/service-provider" className="text-[#1A5319] hover:underline font-medium">
-                        Register as Service Provider
+                      <Link to="/signup/insurer" className="text-[#1A5319] hover:underline font-medium">
+                        Register as Insurer
                       </Link>
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      Note: Service Provider accounts require admin approval
+                      Note: Insurer accounts require admin approval
                     </p>
                   </div>
                 )}

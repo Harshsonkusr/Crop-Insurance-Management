@@ -1,6 +1,7 @@
 import { prisma } from '../db';
 import { Logger } from '../utils/logger';
 import { auditLogService } from './auditLog.service';
+import { NotificationService } from './notification.service';
 
 export class AdminReviewService {
 
@@ -57,7 +58,7 @@ export class AdminReviewService {
             policyNumber: true,
             cropType: true,
             sumInsured: true,
-            serviceProvider: { select: { name: true, email: true } }
+            insurer: { select: { name: true, email: true } }
           }
         },
         documents: {
@@ -93,9 +94,9 @@ export class AdminReviewService {
   }
 
   /**
-   * Admin forwards AI report to Service Provider for final processing
+   * Admin forwards AI report to Insurer for final processing
    */
-  async forwardReportToServiceProvider(
+  async forwardReportToInsurer(
     claimId: string,
     adminId: string,
     adminNotes?: string,
@@ -119,7 +120,7 @@ export class AdminReviewService {
     }
 
     if (!claim.assignedToId) {
-      throw new Error('Claim is not assigned to a service provider');
+      throw new Error('Claim is not assigned to an insurer');
     }
 
     // Update claim status and admin review details
@@ -144,13 +145,33 @@ export class AdminReviewService {
       if (overrideData.validationFlags !== undefined) {
         updateData.aiValidationFlags = overrideData.validationFlags;
       }
-      updateData.adminOverrideReason = 'Admin reviewed and forwarded AI report to Service Provider';
+      updateData.adminOverrideReason = 'Admin reviewed and forwarded AI report to Insurer';
     }
 
     await prisma.claim.update({
       where: { id: claimId },
       data: updateData,
     });
+
+    // Notify Insurer and Farmer
+    try {
+      await Promise.all([
+        NotificationService.create(
+          claim.assignedToId!,
+          'New Claim Report Forwarded',
+          `Admin has forwarded AI analysis for Claim #${claim.claimId} to you for final review.`,
+          'info'
+        ),
+        NotificationService.create(
+          claim.farmerId,
+          'Claim Verification Update',
+          `Your claim #${claim.claimId} has passed AI verification and is now with the insurer for final processing.`,
+          'success'
+        )
+      ]);
+    } catch (notifError) {
+      Logger.error('Failed to send notifications during claim forward', { notifError, claimId });
+    }
 
     // Log the admin action
     await auditLogService.log({
@@ -159,7 +180,7 @@ export class AdminReviewService {
       details: {
         claimId,
         claimIdFormatted: claim.claimId,
-        assignedToSP: claim.assignedTo?.name,
+        assignedToInsurer: claim.assignedTo?.name,
         adminNotes,
         overrides: overrideData,
       },
@@ -167,17 +188,17 @@ export class AdminReviewService {
       resourceId: claimId,
     });
 
-    Logger.admin.action(`Admin ${adminId} forwarded AI report for claim ${claim.claimId} to SP ${claim.assignedTo?.name}`, {
+    Logger.admin.action(`Admin ${adminId} forwarded AI report for claim ${claim.claimId} to Insurer ${claim.assignedTo?.name}`, {
       adminId,
       claimId,
       claimIdFormatted: claim.claimId,
-      serviceProviderId: claim.assignedToId,
-      serviceProviderName: claim.assignedTo?.name,
+      insurerId: claim.assignedToId,
+      insurerName: claim.assignedTo?.name,
       adminNotes,
       overrides: overrideData,
     });
 
-    return { success: true, message: 'AI report forwarded to Service Provider' };
+    return { success: true, message: 'AI report forwarded to Insurer' };
   }
 
   /**
@@ -217,6 +238,18 @@ export class AdminReviewService {
       where: { id: claimId },
       data: updateData,
     });
+
+    // Notify Farmer
+    try {
+      await NotificationService.create(
+        claim.farmerId,
+        'Claim Verification Update',
+        `Your claim #${claim.claimId} AI report was rejected by the admin and sent for manual verification. Reason: ${rejectionReason}`,
+        'warning'
+      );
+    } catch (notifError) {
+      Logger.error('Failed to send notification during claim rejection', { notifError, claimId });
+    }
 
     // Log the admin action
     await auditLogService.log({

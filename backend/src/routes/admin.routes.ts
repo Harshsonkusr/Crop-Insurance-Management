@@ -4,6 +4,7 @@ import { Logger } from '../utils/logger';
 import { prisma } from '../db';
 import { auditLogService } from '../services/auditLog.service';
 import { ClaimStatus, VerificationStatus } from '@prisma/client';
+import { MockAIService } from '../services/ai.service';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.get('/claims/ai-ready', authenticateToken, authorizeRoles(['ADMIN', 'SUPE
               policyNumber: true,
               cropType: true,
               sumInsured: true,
-              serviceProviderId: true,
+              insurerId: true,
             },
           },
           assignedTo: {
@@ -158,8 +159,63 @@ router.get('/claims/:claimId/ai-report', authenticateToken, authorizeRoles(['ADM
   }
 });
 
-// Forward AI report to Service Provider
-router.post('/claims/:claimId/forward-to-sp', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req: AuthRequest, res) => {
+// Trigger AI Analysis for a claim
+router.post('/claims/:claimId/analyze', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req: AuthRequest, res) => {
+  try {
+    const { claimId } = req.params;
+
+    const claim = await prisma.claim.findUnique({
+      where: { id: claimId }
+    });
+
+    if (!claim) {
+      return res.status(404).json({ message: 'Claim not found' });
+    }
+
+    // Run Mock AI Analysis
+    const aiReport = await MockAIService.analyzeClaim(claim);
+
+    // Update Claim with Report and Status
+    const updatedClaim = await prisma.claim.update({
+      where: { id: claimId },
+      data: {
+        verificationStatus: VerificationStatus.AI_Processed_Admin_Review,
+        aiDamagePercent: aiReport.damageAssessment.aiEstimatedDamage,
+        aiReport: aiReport as any, // Cast to any or Json input type
+        aiValidationFlags: aiReport.fraudCheck.flags,
+        // Also log this event
+        updatedAt: new Date()
+      }
+    });
+
+    // Log admin action
+    await auditLogService.log({
+      userId: req.userId!,
+      action: 'RUN_AI_ANALYSIS',
+      resourceType: 'CLAIM',
+      resourceId: claimId,
+      details: {
+        aiDamageDetected: aiReport.damageAssessment.aiEstimatedDamage,
+        isFraudSuspect: aiReport.fraudCheck.isSuspect
+      },
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip,
+    });
+
+    res.json({
+      message: 'AI Analysis completed successfully',
+      report: aiReport,
+      claim: updatedClaim
+    });
+
+  } catch (error) {
+    Logger.error('Error running AI analysis', { error, claimId: req.params.claimId });
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Forward AI report to Insurer
+router.post('/claims/:claimId/forward-to-insurer', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req: AuthRequest, res) => {
   try {
     const { claimId } = req.params;
     const { adminNotes } = req.body;
@@ -182,10 +238,10 @@ router.post('/claims/:claimId/forward-to-sp', authenticateToken, authorizeRoles(
     }
 
     if (!claim.assignedToId) {
-      return res.status(400).json({ message: 'Claim is not assigned to a service provider' });
+      return res.status(400).json({ message: 'Claim is not assigned to an insurer' });
     }
 
-    // Update claim verification status to AI_Satellite_Processed (ready for SP review)
+    // Update claim verification status to AI_Satellite_Processed (ready for Insurer review)
     await prisma.claim.update({
       where: { id: claimId },
       data: {
@@ -204,7 +260,6 @@ router.post('/claims/:claimId/forward-to-sp', authenticateToken, authorizeRoles(
           from: VerificationStatus.AI_Processed_Admin_Review,
           to: VerificationStatus.AI_Satellite_Processed
         },
-        forwardedToSP: claim.assignedToId,
         adminNotes: adminNotes || null,
       },
       changes: {
@@ -215,14 +270,14 @@ router.post('/claims/:claimId/forward-to-sp', authenticateToken, authorizeRoles(
       ipAddress: req.ip,
     });
 
-    Logger.info(`Admin ${req.userId} forwarded AI report for claim ${claimId} to SP ${claim.assignedToId}`, {
+    Logger.info(`Admin ${req.userId} forwarded AI report for claim ${claimId} to Insurer ${claim.assignedToId}`, {
       claimId,
       adminId: req.userId,
-      spId: claim.assignedToId,
+      insurerId: claim.assignedToId,
     });
 
     res.json({
-      message: 'AI report forwarded to service provider successfully',
+      message: 'AI report forwarded to insurer successfully',
       claimId: claim.claimId,
       forwardedTo: {
         id: claim.assignedTo!.id,
@@ -231,7 +286,7 @@ router.post('/claims/:claimId/forward-to-sp', authenticateToken, authorizeRoles(
       },
     });
   } catch (error) {
-    Logger.error('Error forwarding AI report to SP', { error, claimId: req.params.claimId });
+    Logger.error('Error forwarding AI report to Insurer', { error, claimId: req.params.claimId });
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -353,5 +408,6 @@ router.get('/dashboard/ai-stats', authenticateToken, authorizeRoles(['ADMIN', 'S
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 export default router;

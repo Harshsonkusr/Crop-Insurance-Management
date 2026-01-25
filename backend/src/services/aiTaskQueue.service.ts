@@ -121,7 +121,7 @@ export class AiTaskQueueService {
     if (retryCount < task.maxRetries) {
       // Retry with exponential backoff
       const delay = this.retryDelays[retryCount - 1] || 15000;
-      
+
       await prisma.aiTask.update({
         where: { id: taskId },
         data: {
@@ -172,14 +172,14 @@ export class AiTaskQueueService {
   private async processSatellite(input: any): Promise<AiTaskOutput> {
     // TODO: Integrate with satellite imagery service (e.g., Google Earth Engine, Planet Labs)
     const { location, dateOfIncident, images, policyImages } = input;
-    
+
     // Mock satellite analysis - in production, integrate with actual satellite API
     // This should:
     // 1. Fetch satellite imagery for the location and date
     // 2. Compare with policy images (baseline)
     // 3. Compare with claim images (damage assessment)
     // 4. Calculate damage percentage based on satellite data
-    
+
     let damagePercent = 0;
     let recommendedAmount = 0;
     const validationFlags: any = {};
@@ -220,14 +220,14 @@ export class AiTaskQueueService {
   private async processFraudDetection(input: any): Promise<AiTaskOutput> {
     // TODO: Integrate with fraud detection ML model and image matching service
     const { claimData, images, documents, policyImages, policyId } = input;
-    
+
     const validationFlags: any = {
       fraudRisk: 'low',
       imageMatchScore: null,
       locationMatch: true,
       timestampValidation: true,
     };
-    
+
     const report: any = {
       fraud: 'analyzed',
       policyId,
@@ -248,18 +248,18 @@ export class AiTaskQueueService {
       // 2. Extract features from claim images
       // 3. Compare features to determine if they match the same location/farm
       // 4. Calculate similarity score
-      
+
       // Mock image matching logic
       // In production, use computer vision APIs to:
       // - Detect if images are from the same location
       // - Match visual features (landmarks, field boundaries, etc.)
       // - Detect inconsistencies (different locations, manipulated images, etc.)
-      
+
       const mockMatchScore = Math.random() * 100; // Mock similarity score (0-100)
       validationFlags.imageMatchScore = mockMatchScore;
       report.imageMatching.performed = true;
       report.imageMatching.matchScore = mockMatchScore;
-      
+
       // Determine fraud risk based on match score
       if (mockMatchScore < 30) {
         validationFlags.fraudRisk = 'high';
@@ -271,7 +271,7 @@ export class AiTaskQueueService {
         validationFlags.fraudRisk = 'low';
         validationFlags.reason = 'High image similarity - images appear to be from the same location';
       }
-      
+
       // Find matched images (mock)
       report.imageMatching.matchedImages = policyImages.slice(0, Math.min(3, policyImages.length)).map((img: any, idx: number) => ({
         policyImageIndex: idx,
@@ -365,7 +365,29 @@ export class AiTaskQueueService {
         },
       });
 
-      Logger.info(`All AI tasks completed for claim ${claimId}, verification status updated to AI_Processed_Admin_Review`);
+      // Notify Admins that a claim is ready for review
+      try {
+        const admins = await prisma.user.findMany({
+          where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] }, status: 'active' },
+          select: { id: true }
+        });
+
+        const { NotificationService } = await import('./notification.service');
+        const claim = await prisma.claim.findUnique({ where: { id: claimId }, select: { claimId: true } });
+
+        await Promise.all(admins.map(admin =>
+          NotificationService.create(
+            admin.id,
+            'New Claim Ready for Review',
+            `AI processing for Claim #${claim?.claimId || claimId} is complete. It is now pending your review.`,
+            'info'
+          )
+        ));
+      } catch (notifError) {
+        Logger.error('Failed to notify admins of completed AI processing', { notifError, claimId });
+      }
+
+      Logger.info(`All AI tasks completed for claim ${claimId}, verification status updated to AI_Processed_Admin_Review and notifications sent.`);
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Eye, Edit, MoreVertical, FileText, Clock, CheckCircle2, XCircle, Brain, Send, X } from 'lucide-react';
+import { Search, Filter, Eye, Clock, Brain, Send, X, FileText } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ import api from '../../lib/api';
 
 interface Claim {
   id: string;
-  _id?: string; // Keep for backward compatibility
+  _id?: string;
   claimId?: string;
   farmerId: {
     name: string;
@@ -117,19 +117,19 @@ const AdminClaimsManagement = () => {
     }
   };
 
-  const handleForwardToSP = async () => {
+  const handleForwardToInsurer = async () => {
     if (!selectedClaim) return;
 
     try {
       setProcessing(true);
-      await api.post(`/admin/claims/${selectedClaim.id || selectedClaim._id}/forward-to-sp`, {
+      await api.post(`/admin/claims/${selectedClaim.id || selectedClaim._id}/forward-to-insurer`, {
         adminNotes: adminNotes.trim() || undefined,
       });
       setShowForwardDialog(false);
       setAdminNotes('');
       setSelectedClaim(null);
       fetchAiReadyClaims();
-      alert('AI report forwarded to service provider successfully.');
+      alert('AI report forwarded to insurer successfully.');
     } catch (err: any) {
       console.error("Error forwarding AI report:", err);
       alert(err?.response?.data?.message || "Failed to forward AI report.");
@@ -169,8 +169,8 @@ const AdminClaimsManagement = () => {
       'in_review': { label: 'In Review', variant: 'outline', className: 'bg-blue-100 text-blue-800' },
     };
 
-    const config = statusConfig[status.toLowerCase()] || { 
-      label: status, 
+    const config = statusConfig[status.toLowerCase()] || {
+      label: status,
       variant: 'outline' as const,
       className: 'bg-gray-100 text-gray-800'
     };
@@ -182,68 +182,167 @@ const AdminClaimsManagement = () => {
     );
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return <CheckCircle2 className="h-4 w-4" />;
-      case 'rejected':
-        return <XCircle className="h-4 w-4" />;
-      case 'pending':
-        return <Clock className="h-4 w-4" />;
-      default:
-        return <FileText className="h-4 w-4" />;
-    }
-  };
+  const currentDisplayClaims = activeTab === 'ai-ready' ? aiReadyClaims : claims;
+  const currentLoading = activeTab === 'ai-ready' ? aiLoading : loading;
 
-  if (loading && claims.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-gray-600">Loading claims...</p>
+  const TableView = (
+    <div className="space-y-4">
+      {currentDisplayClaims.length === 0 && !currentLoading ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg font-medium">No claims found</p>
+            <p className="text-gray-500 mt-2">
+              {searchTerm || filterStatus !== 'all'
+                ? 'Try adjusting your search or filter criteria.'
+                : 'No claims have been submitted yet.'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden border-none shadow-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-blue-600 border-b border-blue-700">
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Claim ID & Farmer</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Date Submitted</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Assigned To</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Amount</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {currentDisplayClaims.map((claim) => (
+                  <tr key={claim._id} className="hover:bg-blue-50/50 transition-all group border-l-4 border-transparent hover:border-blue-500">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">#{claim.claimId || claim._id?.slice(-8)}</span>
+                        <span className="text-sm text-gray-500 group-hover:text-blue-600 transition-colors">{claim.farmerId?.name || 'Unknown'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Clock className="h-3 w-3 text-gray-400" />
+                        <span>{new Date(claim.dateOfClaim || claim.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700">
+                      {claim.assignedTo?.name || 'Unassigned'}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-green-700">
+                      ₹{claim.amountClaimed?.toLocaleString('en-IN') || '0'}
+                    </td>
+                    <td className="px-6 py-4">
+                      {getStatusBadge(claim.status)}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link to={`/admin-dashboard/claims/${claim.id || claim._id}`}>
+                          <Button variant="ghost" size="icon" title="View Details" className="h-8 w-8 text-blue-600 hover:bg-blue-50">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        {activeTab === 'ai-ready' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedClaim(claim);
+                                setShowForwardDialog(true);
+                              }}
+                              title="Forward to Insurer"
+                              className="h-8 w-8 text-green-600 hover:bg-green-50"
+                            >
+                              <Send className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSelectedClaim(claim);
+                                setShowRejectDialog(true);
+                              }}
+                              title="Reject AI Report"
+                              className="h-8 w-8 text-red-600 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-6">
+          <Button
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            variant="outline"
+            size="sm"
+          >
+            Previous
+          </Button>
+          <span className="px-4 py-2 text-sm text-gray-600">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            variant="outline"
+            size="sm"
+          >
+            Next
+          </Button>
         </div>
-      </div>
-    );
-  }
-
-  const displayClaims = activeTab === 'ai-ready' ? aiReadyClaims : claims;
-  const isLoading = activeTab === 'ai-ready' ? aiLoading : loading;
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Manage Claims</h1>
-          <p className="text-gray-600 mt-1">View and manage all insurance claims</p>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3 tracking-tight">
+            <span className="p-2 bg-blue-100 rounded-lg text-blue-700">
+              <FileText className="h-8 w-8" />
+            </span>
+            Manage Claims
+          </h1>
+          <p className="text-gray-600 mt-1 ml-14">View and manage all insurance claims</p>
         </div>
         <div className="text-sm text-gray-600">
           Total: <span className="font-semibold text-gray-900">{totalClaims}</span> claims
         </div>
       </div>
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="all">All Claims</TabsTrigger>
           <TabsTrigger value="ai-ready">
             <Brain className="h-4 w-4 mr-2" />
-            AI Ready for Review ({aiReadyClaims.length})
+            AI Ready for Review
           </TabsTrigger>
         </TabsList>
 
-        {/* All Claims Tab */}
-        <TabsContent value="all" className="space-y-6">
-
-          {/* Filters */}
-          <Card>
+        <TabsContent value="all" className="mt-6">
+          <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <Input
                     type="text"
-                    placeholder="Search by claim ID, farmer name, description..."
+                    placeholder="Search by claim ID, farmer name..."
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -258,7 +357,7 @@ const AdminClaimsManagement = () => {
                 }}>
                   <SelectTrigger className="w-full sm:w-[200px]">
                     <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Filter by status" />
+                    <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
@@ -271,265 +370,23 @@ const AdminClaimsManagement = () => {
               </div>
             </CardContent>
           </Card>
-
-          {/* Error State */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800">{error}</p>
-            </div>
-          )}
-
-          {/* Claims List */}
-          {displayClaims.length === 0 && !isLoading ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 text-lg font-medium">No claims found</p>
-            <p className="text-gray-500 mt-2">
-              {searchTerm || filterStatus !== 'all' 
-                ? 'Try adjusting your search or filter criteria.'
-                : 'No claims have been submitted yet.'}
-            </p>
-          </CardContent>
-        </Card>
-          ) : (
-            <div className="space-y-4">
-              {displayClaims.map((claim) => (
-            <Card key={claim._id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            Claim #{claim.claimId || claim._id.slice(-8)}
-                          </h3>
-                          {getStatusBadge(claim.status)}
-                        </div>
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {claim.description || 'No description provided'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-sm">
-                      <div>
-                        <p className="text-gray-500">Farmer</p>
-                        <p className="font-medium text-gray-900">
-                          {claim.farmerId?.name || 'Unknown'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Date Submitted</p>
-                        <p className="font-medium text-gray-900">
-                          {new Date(claim.dateOfClaim || claim.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Assigned To</p>
-                        <p className="font-medium text-gray-900">
-                          {claim.assignedTo?.name || 'Unassigned'}
-                        </p>
-                      </div>
-                      {claim.amountClaimed && (
-                        <div>
-                          <p className="text-gray-500">Amount Claimed</p>
-                          <p className="font-medium text-gray-900">
-                            ₹{claim.amountClaimed.toLocaleString('en-IN')}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 lg:flex-col lg:items-end">
-                    <Link
-                      to={`/admin-dashboard/claims/${claim.id || claim._id}`}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                      <Eye className="h-4 w-4" />
-                      View Details
-                    </Link>
-                    {activeTab === 'ai-ready' && (
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => {
-                            setSelectedClaim(claim);
-                            setShowForwardDialog(true);
-                          }}
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          <Send className="h-4 w-4 mr-1" />
-                          Forward
-                        </Button>
-                        <Button
-                          onClick={() => {
-                            setSelectedClaim(claim);
-                            setShowRejectDialog(true);
-                          }}
-                          size="sm"
-                          variant="destructive"
-                        >
-                          <X className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-600">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          )}
+          {TableView}
         </TabsContent>
 
-        {/* AI Ready Claims Tab */}
-        <TabsContent value="ai-ready" className="space-y-6">
-          {aiLoading && aiReadyClaims.length === 0 ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                <p className="text-gray-600">Loading AI-ready claims...</p>
-              </div>
-            </div>
-          ) : aiReadyClaims.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg font-medium">No AI-ready claims</p>
-                <p className="text-gray-500 mt-2">No claims are currently ready for AI report review.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {aiReadyClaims.map((claim) => (
-                <Card key={claim._id} className="hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-semibold text-gray-900">
-                                Claim #{claim.claimId || claim._id.slice(-8)}
-                              </h3>
-                              <Badge className="bg-purple-100 text-purple-800">
-                                <Brain className="h-3 w-3 mr-1" />
-                                AI Ready
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-gray-600 line-clamp-2">
-                              {claim.description || 'No description provided'}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-sm">
-                          <div>
-                            <p className="text-gray-500">Farmer</p>
-                            <p className="font-medium text-gray-900">
-                              {claim.farmerId?.name || 'Unknown'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Date Submitted</p>
-                            <p className="font-medium text-gray-900">
-                              {new Date(claim.dateOfClaim || claim.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Assigned To</p>
-                            <p className="font-medium text-gray-900">
-                              {claim.assignedTo?.name || 'Unassigned'}
-                            </p>
-                          </div>
-                          {claim.amountClaimed && (
-                            <div>
-                              <p className="text-gray-500">Amount Claimed</p>
-                              <p className="font-medium text-gray-900">
-                                ₹{claim.amountClaimed.toLocaleString('en-IN')}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 lg:flex-col lg:items-end">
-                        <Link
-                          to={`/admin-dashboard/claims/${claim.id || claim._id}`}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
-                        >
-                          <Eye className="h-4 w-4" />
-                          Review AI Report
-                        </Link>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => {
-                              setSelectedClaim(claim);
-                              setShowForwardDialog(true);
-                            }}
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <Send className="h-4 w-4 mr-1" />
-                            Forward
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setSelectedClaim(claim);
-                              setShowRejectDialog(true);
-                            }}
-                            size="sm"
-                            variant="destructive"
-                          >
-                            <X className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+        <TabsContent value="ai-ready" className="mt-6">
+          <div className="mb-4 flex items-center gap-2 p-3 bg-purple-50 border border-purple-100 rounded-lg text-purple-800 text-sm">
+            <Brain className="h-4 w-4" />
+            <span>These claims have been processed by satellite AI and are ready for official verification.</span>
+          </div>
+          {TableView}
         </TabsContent>
       </Tabs>
 
-      {/* Forward to SP Dialog */}
       <Dialog open={showForwardDialog} onOpenChange={setShowForwardDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Forward AI Report to Service Provider</DialogTitle>
-            <DialogDescription>
-              Forward the AI-processed report to the assigned service provider for review.
-            </DialogDescription>
+            <DialogTitle>Forward AI Report to Insurer</DialogTitle>
+            <DialogDescription>Forward the AI-processed report to the assigned insurer.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -538,38 +395,25 @@ const AdminClaimsManagement = () => {
                 id="adminNotes"
                 value={adminNotes}
                 onChange={(e) => setAdminNotes(e.target.value)}
-                placeholder="Add any notes for the service provider..."
+                placeholder="Add notes..."
                 rows={4}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowForwardDialog(false);
-              setAdminNotes('');
-              setSelectedClaim(null);
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleForwardToSP}
-              disabled={processing}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {processing ? 'Forwarding...' : 'Forward to SP'}
+            <Button variant="outline" onClick={() => setShowForwardDialog(false)}>Cancel</Button>
+            <Button onClick={handleForwardToInsurer} disabled={processing} className="bg-green-600 hover:bg-green-700">
+              {processing ? 'Forwarding...' : 'Forward to Insurer'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Reject AI Report Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject AI Report</DialogTitle>
-            <DialogDescription>
-              Reject the AI report and send the claim for manual review.
-            </DialogDescription>
+            <DialogDescription>Reject AI report and send for manual review.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -578,37 +422,16 @@ const AdminClaimsManagement = () => {
                 id="rejectReason"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Enter reason for rejecting the AI report..."
+                placeholder="Enter reason..."
                 rows={3}
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="adminNotesReject">Admin Notes (Optional)</Label>
-              <Textarea
-                id="adminNotesReject"
-                value={adminNotes}
-                onChange={(e) => setAdminNotes(e.target.value)}
-                placeholder="Add any additional notes..."
-                rows={3}
-              />
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowRejectDialog(false);
-              setRejectReason('');
-              setAdminNotes('');
-              setSelectedClaim(null);
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleRejectAIReport}
-              disabled={processing || !rejectReason.trim()}
-              variant="destructive"
-            >
-              {processing ? 'Rejecting...' : 'Reject & Send for Manual Review'}
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
+            <Button onClick={handleRejectAIReport} disabled={processing || !rejectReason.trim()} variant="destructive">
+              {processing ? 'Rejecting...' : 'Reject & Send Manual'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,14 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  PlusCircle, 
-  Bell, 
-  Cloud, 
-  CheckCircle2, 
-  Clock, 
-  XCircle, 
-  FileText, 
+import {
+  PlusCircle,
+  Bell,
+  Cloud,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  FileText,
   TrendingUp,
   Shield,
   MapPin,
@@ -62,11 +62,13 @@ interface Policy {
   id: string;
   policyNumber: string;
   cropType: string;
-  coverageAmount: number;
-  premiumAmount: number;
+  sumInsured: number;
+  premium: number;
   startDate: string;
   endDate: string;
   status: string;
+  viewStatus: string;
+  type: string;
   nextPremiumDue?: string;
 }
 
@@ -95,7 +97,7 @@ const FarmerDashboardOverview = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch quick stats
       try {
         const statsResponse = await api.get('/admin/dashboard/farmer/quick-stats');
@@ -150,7 +152,7 @@ const FarmerDashboardOverview = () => {
       try {
         const policiesResponse = await api.get('/farmer/policies');
         const policies = Array.isArray(policiesResponse.data) ? policiesResponse.data : [];
-        setActivePolicies(policies.filter((p: Policy) => p.status === 'active').slice(0, 3));
+        setActivePolicies(policies.filter((p: Policy) => p.viewStatus === 'Active').slice(0, 3));
       } catch (err: any) {
         console.error('Error fetching policies:', err);
         if (err?.response?.status === 401) {
@@ -209,7 +211,7 @@ const FarmerDashboardOverview = () => {
     };
 
     const config = statusConfig[status.toLowerCase()] || { label: status, variant: 'outline' as const };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return <Badge variant={config.variant as any}>{config.label}</Badge>;
   };
 
   const formatDate = (dateString: string) => {
@@ -314,7 +316,7 @@ const FarmerDashboardOverview = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(activePolicies.reduce((sum, p) => sum + (p.coverageAmount || 0), 0))}
+                  {formatCurrency(activePolicies.reduce((sum, p) => sum + (p.sumInsured || 0), 0))}
                 </div>
               </CardContent>
             </Card>
@@ -355,12 +357,6 @@ const FarmerDashboardOverview = () => {
                   <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2">
                     <FileText className="h-6 w-6 text-purple-500" />
                     <span className="text-sm">My Policies</span>
-                  </Button>
-                </Link>
-                <Link to="/farmer-dashboard/farm-details">
-                  <Button variant="outline" className="w-full h-auto py-4 flex flex-col items-center gap-2">
-                    <MapPin className="h-6 w-6 text-green-500" />
-                    <span className="text-sm">Farm Details</span>
                   </Button>
                 </Link>
                 <Link to="/farmer-dashboard/my-claims">
@@ -472,7 +468,7 @@ const FarmerDashboardOverview = () => {
                 <div className="text-center py-8 text-gray-500">
                   <Shield className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                   <p className="mb-4">No active policies</p>
-                  <p className="text-sm text-gray-400">Contact your service provider to get insured</p>
+                  <p className="text-sm text-gray-400">Contact your insurer to get insured</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -489,16 +485,16 @@ const FarmerDashboardOverview = () => {
                           </h4>
                           <p className="text-sm text-gray-600">{policy.cropType}</p>
                         </div>
-                        {getStatusBadge(policy.status)}
+                        {getStatusBadge(policy.viewStatus)}
                       </div>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-gray-500">Coverage</p>
-                          <p className="font-semibold text-green-600">{formatCurrency(policy.coverageAmount)}</p>
+                          <p className="font-semibold text-green-600">{formatCurrency(policy.sumInsured)}</p>
                         </div>
                         <div>
                           <p className="text-gray-500">Premium</p>
-                          <p className="font-semibold">{formatCurrency(policy.premiumAmount)}</p>
+                          <p className="font-semibold">{formatCurrency(policy.premium)}</p>
                         </div>
                         <div>
                           <p className="text-gray-500">Valid Until</p>

@@ -93,27 +93,27 @@ export class ExternalPolicyService {
       const syncedPolicies = [];
 
       for (const policyData of policies) {
-        // RULE: External policies must automatically map to the insurer (SP) who issued them
-        // Find or create service provider for external insurer
-        let serviceProvider = await prisma.serviceProvider.findFirst({
+        // RULE: External policies must automatically map to the insurer who issued them
+        // Find or create insurer for external insurer
+        let insurer = await prisma.insurer.findFirst({
           where: { email: policyData.insurerEmail },
         });
 
-        if (!serviceProvider) {
-          // Create placeholder SP for external insurer
+        if (!insurer) {
+          // Create placeholder Insurer for external insurer
           // In production, maintain a registry of external insurers
-          // RULE: External policies auto-map to insurer SP
+          // RULE: External policies auto-map to insurer
           const insurerUser = await prisma.user.create({
             data: {
               name: policyData.insurerName || 'External Insurer',
               email: policyData.insurerEmail,
-              role: 'SERVICE_PROVIDER',
+              role: 'INSURER',
               status: 'active',
               isApproved: true,
             },
           });
 
-          serviceProvider = await prisma.serviceProvider.create({
+          insurer = await prisma.insurer.create({
             data: {
               userId: insurerUser.id,
               name: policyData.insurerName || 'External Insurer',
@@ -132,13 +132,15 @@ export class ExternalPolicyService {
           update: {
             externalSyncAt: new Date(),
             syncStatus: 'synced',
+            landRecordKhasra: policyData.landRecordKhasra || undefined,
             policyVerified: policyData.verified || false,
             insurerApiResponse: policyData,
           },
           create: {
             policyNumber: policyData.policyNumber,
             farmerId,
-            serviceProviderId: serviceProvider.id,
+            insurerId: insurer.id,
+            landRecordKhasra: policyData.landRecordKhasra || null,
             cropType: policyData.cropType,
             insuredArea: policyData.insuredArea,
             startDate: new Date(policyData.startDate),
@@ -169,22 +171,22 @@ export class ExternalPolicyService {
         });
       }
 
-      Logger.policy.synced('External policies synced successfully', { 
-        farmerId, 
+      Logger.policy.synced('External policies synced successfully', {
+        farmerId,
         count: syncedPolicies.length,
         syncedPolicyNumbers: syncedPolicies.map(p => p.policyNumber)
       });
       return syncedPolicies;
     } catch (error: any) {
       // Log detailed error information but don't throw - return empty array
-      Logger.error('Failed to sync external policies (non-critical)', { 
+      Logger.error('Failed to sync external policies (non-critical)', {
         error: error?.message || String(error),
         errorStack: error?.stack,
         farmerId,
         hasAadhaar: !!aadhaar,
         hasPhone: !!phone
       });
-      
+
       // Don't mark policies as stale or throw error - just return empty array
       // This ensures registration doesn't fail if external policy sync fails
       return [];

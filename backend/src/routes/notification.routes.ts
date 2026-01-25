@@ -1,93 +1,86 @@
 import { Router } from 'express';
-import { authenticateToken, authorizeRoles, AuthRequest } from '../middleware/auth';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { prisma } from '../db';
+import { Logger } from '../utils/logger';
 
 const router = Router();
 
-// Get notification preferences for Service Provider
-router.get('/service-provider/notifications', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Get all notifications for the authenticated user
+router.get('/notifications', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    // Optional filter: only unread
+    const unreadOnly = req.query.unread === 'true';
+    const whereClause: any = { userId: req.userId };
+    if (unreadOnly) {
+      whereClause.read = false;
     }
 
-    // For now, return default preferences
-    // In future, can be stored in UserPreferences model
+    const [notifications, total, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.notification.count({ where: whereClause }),
+      prisma.notification.count({ where: { userId: req.userId, read: false } })
+    ]);
+
     res.json({
-      email: true,
-      sms: true,
+      notifications,
+      total,
+      unreadCount,
+      page,
+      totalPages: Math.ceil(total / limit)
     });
   } catch (error) {
-    console.error('Error fetching notification preferences:', error);
+    Logger.error('Error fetching notifications', { error, userId: req.userId });
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Update notification preferences for Service Provider
-router.put('/service-provider/notifications', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Mark a specific notification as read
+router.put('/notifications/:id/read', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    const { id } = req.params;
+
+    const notification = await prisma.notification.findFirst({
+      where: { id, userId: req.userId! }
+    });
+
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
     }
 
-    const { email, sms } = req.body;
-
-    // For now, just acknowledge the update
-    // In future, store in UserPreferences model
-    console.log('Notification preferences updated for user:', req.userId, { email, sms });
-
-    res.json({ 
-      message: 'Notification preferences updated successfully',
-      preferences: { email, sms }
+    const updated = await prisma.notification.update({
+      where: { id },
+      data: { read: true }
     });
+
+    res.json(updated);
   } catch (error) {
-    console.error('Error updating notification preferences:', error);
+    Logger.error('Error marking notification as read', { error, notificationId: req.params.id });
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Get notification preferences for Farmer
-router.get('/farmer/notifications', authenticateToken, authorizeRoles(['FARMER']), async (req: AuthRequest, res) => {
+// Mark all notifications as read
+router.post('/notifications/mark-all-read', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    // For now, return default preferences
-    // In future, can be stored in UserPreferences model
-    res.json({
-      email: false,
-      sms: false,
+    const updated = await prisma.notification.updateMany({
+      where: { userId: req.userId!, read: false },
+      data: { read: true }
     });
+
+    res.json({ message: 'All notifications marked as read', count: updated.count });
   } catch (error) {
-    console.error('Error fetching notification preferences:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Update notification preferences for Farmer
-router.put('/farmer/notifications', authenticateToken, authorizeRoles(['FARMER']), async (req: AuthRequest, res) => {
-  try {
-    if (!req.userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    const { email, sms } = req.body;
-
-    // For now, just acknowledge the update
-    // In future, store in UserPreferences model
-    console.log('Notification preferences updated for user:', req.userId, { email, sms });
-
-    res.json({ 
-      message: 'Notification preferences updated successfully',
-      preferences: { email, sms }
-    });
-  } catch (error) {
-    console.error('Error updating notification preferences:', error);
+    Logger.error('Error marking all notifications as read', { error, userId: req.userId });
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 export default router;
-
-
-

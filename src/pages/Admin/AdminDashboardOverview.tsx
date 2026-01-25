@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  FileText, 
-  Building2, 
-  TrendingUp, 
-  Clock, 
-  CheckCircle2, 
+import {
+  Users,
+  FileText,
+  Building2,
+  TrendingUp,
+  Clock,
+  CheckCircle2,
   XCircle,
   AlertCircle,
   ArrowUpRight,
@@ -21,7 +21,7 @@ import { useAuth } from '../../components/Auth/AuthContext';
 interface DashboardSummary {
   totalUsers: number;
   totalClaims: number;
-  totalServiceProviders: number;
+  totalInsurers: number;
   claimsByStatus: Array<{ _id: string; count: number }>;
   recentAuditLogs: Array<{
     _id: string;
@@ -104,12 +104,12 @@ const AdminDashboardOverview = () => {
       link: '/admin-dashboard/claims',
     },
     {
-      title: 'Service Providers',
-      value: summary?.totalServiceProviders || 0,
+      title: 'Insurers',
+      value: summary?.totalInsurers || 0,
       icon: Building2,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      link: '/admin-dashboard/service-providers',
+      link: '/admin-dashboard/insurers',
     },
     {
       title: 'Pending Claims',
@@ -161,20 +161,22 @@ const AdminDashboardOverview = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, index) => {
           const Icon = stat.icon;
+          const accentColor = stat.color.replace('text-', 'bg-');
           return (
             <Link key={index} to={stat.link}>
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+              <Card className="transition-all hover:shadow-xl hover:-translate-y-1 border-none shadow-md overflow-hidden bg-white/50 backdrop-blur-sm group cursor-pointer">
+                <div className={`h-1 ${accentColor}`}></div>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">
+                      <p className="text-sm font-semibold text-gray-500 mb-1">
                         {stat.title}
                       </p>
-                      <p className="text-3xl font-bold text-gray-900">
+                      <p className="text-3xl font-extrabold text-gray-900 group-hover:text-blue-700 transition-colors tracking-tight">
                         {stat.value.toLocaleString()}
                       </p>
                     </div>
-                    <div className={`${stat.bgColor} p-3 rounded-lg`}>
+                    <div className={`${stat.bgColor} p-3 rounded-2xl shadow-inner group-hover:scale-110 transition-transform`}>
                       <Icon className={`h-6 w-6 ${stat.color}`} />
                     </div>
                   </div>
@@ -189,19 +191,21 @@ const AdminDashboardOverview = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {claimStatusCards.map((stat, index) => {
           const Icon = stat.icon;
+          const accentColor = stat.color.replace('text-', 'bg-');
           return (
-            <Card key={index}>
+            <Card key={index} className="transition-all hover:shadow-lg border-none shadow-sm bg-white group">
+              <div className={`h-1 ${accentColor} opacity-50`}></div>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">
+                    <p className="text-sm font-semibold text-gray-500 mb-1">
                       {stat.title} Claims
                     </p>
-                    <p className="text-2xl font-bold text-gray-900">
+                    <p className="text-2xl font-extrabold text-gray-900 group-hover:text-gray-700 transition-colors">
                       {stat.value.toLocaleString()}
                     </p>
                   </div>
-                  <div className={`${stat.bgColor} p-3 rounded-lg`}>
+                  <div className={`${stat.bgColor} p-3 rounded-xl group-hover:rotate-6 transition-transform`}>
                     <Icon className={`h-6 w-6 ${stat.color}`} />
                   </div>
                 </div>
@@ -214,27 +218,27 @@ const AdminDashboardOverview = () => {
       {/* Recent Activity & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="border-none shadow-xl bg-white border-l-4 border-l-blue-500 overflow-hidden group">
+          <CardHeader className="bg-blue-50/30 border-b border-blue-100/50">
+            <CardTitle className="flex items-center gap-2 text-blue-900 group-hover:text-blue-700 transition-colors">
               <Activity className="h-5 w-5" />
               Recent Activity
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {summary?.recentAuditLogs && summary.recentAuditLogs.length > 0 ? (
               <div className="space-y-4">
                 {summary.recentAuditLogs.map((log) => (
                   <div
                     key={log._id}
-                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-blue-50 transition-all border border-transparent hover:border-blue-100 group/item"
                   >
-                    <div className="w-2 h-2 rounded-full bg-blue-600 mt-2 flex-shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-blue-600 mt-2 flex-shrink-0 group-hover/item:scale-150 transition-transform" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-bold text-gray-900 group-hover/item:text-blue-700 transition-colors">
                         {log.action}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-[11px] font-medium text-gray-500 mt-1 uppercase tracking-tight">
                         {log.user} • {new Date(log.timestamp).toLocaleString()}
                       </p>
                     </div>
@@ -248,7 +252,7 @@ const AdminDashboardOverview = () => {
             )}
             <Link
               to="/admin-dashboard/audit-log"
-              className="mt-4 block text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="mt-6 block text-center text-sm text-blue-600 hover:text-blue-700 font-bold uppercase tracking-wider transition-colors"
             >
               View all activity →
             </Link>
@@ -256,42 +260,50 @@ const AdminDashboardOverview = () => {
         </Card>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="border-none shadow-xl bg-white border-l-4 border-l-purple-500 overflow-hidden group">
+          <CardHeader className="bg-purple-50/30 border-b border-purple-100/50">
+            <CardTitle className="flex items-center gap-2 text-purple-900 group-hover:text-purple-700 transition-colors">
               <TrendingUp className="h-5 w-5" />
               Quick Actions
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="grid grid-cols-2 gap-3">
               <Link
                 to="/admin-dashboard/claims"
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-center"
+                className="p-4 border border-gray-100 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-center shadow-sm hover:shadow-md group/action"
               >
-                <FileText className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                <p className="text-sm font-medium text-gray-900">View Claims</p>
+                <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-blue-600 group-hover/action:scale-110 transition-transform">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">View Claims</p>
               </Link>
               <Link
                 to="/admin-dashboard/users/add"
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors text-center"
+                className="p-4 border border-gray-100 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all text-center shadow-sm hover:shadow-md group/action"
               >
-                <Users className="h-6 w-6 mx-auto mb-2 text-green-600" />
-                <p className="text-sm font-medium text-gray-900">Add User</p>
+                <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-green-600 group-hover/action:scale-110 transition-transform">
+                  <Users className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">Add User</p>
               </Link>
               <Link
                 to="/admin-dashboard/users/pending"
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 transition-colors text-center"
+                className="p-4 border border-gray-100 rounded-xl hover:border-yellow-500 hover:bg-yellow-50 transition-all text-center shadow-sm hover:shadow-md group/action"
               >
-                <Clock className="h-6 w-6 mx-auto mb-2 text-yellow-600" />
-                <p className="text-sm font-medium text-gray-900">Pending</p>
+                <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-yellow-600 group-hover/action:scale-110 transition-transform">
+                  <Clock className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">Pending</p>
               </Link>
               <Link
                 to="/admin-dashboard/reports"
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors text-center"
+                className="p-4 border border-gray-100 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all text-center shadow-sm hover:shadow-md group/action"
               >
-                <TrendingUp className="h-6 w-6 mx-auto mb-2 text-purple-600" />
-                <p className="text-sm font-medium text-gray-900">Reports</p>
+                <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-purple-600 group-hover/action:scale-110 transition-transform">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-bold text-gray-900">Reports</p>
               </Link>
             </div>
           </CardContent>

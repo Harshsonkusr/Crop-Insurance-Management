@@ -1,6 +1,6 @@
 /**
  * Policy Request Routes
- * Farmers request policies, SPs issue them
+ * Farmers request policies, Insurers issue them
  */
 
 import { Router } from 'express';
@@ -37,46 +37,73 @@ router.post('/policy-requests', authenticateToken, authorizeRoles(['FARMER']), u
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { 
-      serviceProviderId, 
-      cropType, 
-      insuredArea, 
-      requestedStartDate, 
-      requestType, 
+    const {
+      insurerId,
+      cropType,
+      insuredArea,
+      requestedStartDate,
+      requestType,
       existingPolicyId,
-      // Crop details
+      cropName,
+      surveyNumber,
+      khewatNumber,
+      insuranceUnit,
+      sumInsured,
+      sowingDate,
+      wildAnimalAttackCoverage,
+      bankName,
+      bankAccountNo,
+      bankIfsc,
+      // Existing crop details
       cropVariety,
       expectedYield,
       cultivationSeason,
       soilType,
       irrigationMethod,
-      cropDescription
+      cropDescription,
+      paymentDetails
     } = req.body;
-    
+
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } || {};
     const documentFiles = files['documents'] || [];
     const farmImageFiles = files['farmImages'] || [];
 
-    if (!serviceProviderId || !cropType || !insuredArea) {
-      return res.status(400).json({ message: 'Service provider, crop type, and insured area are required' });
+    if (!insurerId || !cropType || !insuredArea) {
+      return res.status(400).json({ message: 'Insurer, crop type, and insured area are required' });
+    }
+
+    // Payment Validation (Mock)
+    let parsedPaymentDetails: any = null;
+    if (paymentDetails) {
+      try {
+        parsedPaymentDetails = typeof paymentDetails === 'string' ? JSON.parse(paymentDetails) : paymentDetails;
+        if (!parsedPaymentDetails.transactionId || parsedPaymentDetails.status !== 'success') {
+          return res.status(400).json({ message: 'Payment verification failed' });
+        }
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid payment details format' });
+      }
+    } else {
+      // Enforce payment
+      return res.status(400).json({ message: 'Premium payment is required to submit a policy request.' });
     }
 
     // For new/renewal policy requests, farm images are required
     if (farmImageFiles.length === 0) {
-      return res.status(400).json({ 
-        message: 'Farm photos from different angles are required for policy request. Please upload at least one farm photo.' 
+      return res.status(400).json({
+        message: 'Farm photos from different angles are required for policy request. Please upload at least one farm photo.'
       });
     }
 
-    // RULE: Only APPROVED SPs can receive policy requests
-    // Verify SP exists and is approved
-    const sp = await prisma.serviceProvider.findUnique({
-      where: { id: serviceProviderId },
+    // RULE: Only APPROVED Insurers can receive policy requests
+    // Verify Insurer exists and is approved
+    const insurer = await prisma.insurer.findUnique({
+      where: { id: insurerId },
       include: { user: true },
     });
 
-    if (!sp || sp.status !== 'active' || !sp.user.isApproved || !sp.kycVerified) {
-      return res.status(400).json({ message: 'Service provider not available or not approved. Only approved service providers can receive policy requests.' });
+    if (!insurer || insurer.status !== 'active' || !insurer.user.isApproved || !insurer.kycVerified) {
+      return res.status(400).json({ message: 'Insurer not available or not approved. Only approved insurers can receive policy requests.' });
     }
 
     const documents = documentFiles.map(f => ({
@@ -103,16 +130,29 @@ router.post('/policy-requests', authenticateToken, authorizeRoles(['FARMER']), u
     if (irrigationMethod) cropDetails.irrigationMethod = irrigationMethod;
     if (cropDescription) cropDetails.cropDescription = cropDescription;
 
+    // New PMFBY fields
+    if (cropName) cropDetails.cropName = cropName;
+    if (surveyNumber) cropDetails.surveyNumber = surveyNumber;
+    if (khewatNumber) cropDetails.khewatNumber = khewatNumber;
+    if (insuranceUnit) cropDetails.insuranceUnit = insuranceUnit;
+    if (sumInsured) cropDetails.sumInsured = parseFloat(sumInsured);
+    if (sowingDate) cropDetails.sowingDate = sowingDate;
+    if (wildAnimalAttackCoverage !== undefined) cropDetails.wildAnimalAttackCoverage = wildAnimalAttackCoverage === 'true' || wildAnimalAttackCoverage === true;
+    if (bankName) cropDetails.bankName = bankName;
+    if (bankAccountNo) cropDetails.bankAccountNo = bankAccountNo;
+    if (bankIfsc) cropDetails.bankIfsc = bankIfsc;
+
     const request = await prisma.policyRequest.create({
       data: {
         farmerId: req.userId,
-        serviceProviderId,
+        insurerId,
         cropType,
         insuredArea: parseFloat(insuredArea),
         requestedStartDate: requestedStartDate ? new Date(requestedStartDate) : null,
         documents: documents.length > 0 ? (documents as any) : null,
         farmImages: farmImages.length > 0 ? (farmImages as any) : null,
         cropDetails: Object.keys(cropDetails).length > 0 ? (cropDetails as any) : null,
+        paymentDetails: parsedPaymentDetails,
         status: 'pending',
         // Add metadata for renewal requests
         ...(requestType === 'renewal' && existingPolicyId ? {
@@ -140,7 +180,7 @@ router.get('/policy-requests/my-requests', authenticateToken, authorizeRoles(['F
     const requests = await prisma.policyRequest.findMany({
       where: { farmerId: req.userId },
       include: {
-        serviceProvider: {
+        insurer: {
           select: { name: true, email: true },
         },
       },
@@ -154,22 +194,22 @@ router.get('/policy-requests/my-requests', authenticateToken, authorizeRoles(['F
   }
 });
 
-// SP: Get policy requests assigned to me
-// RULE: SP should only see policy requests where farmer selected them
-router.get('/policy-requests', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Insurer: Get policy requests assigned to me
+// RULE: Insurer should only see policy requests where farmer selected them
+router.get('/policy-requests', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const sp = await prisma.serviceProvider.findUnique({ where: { userId: req.userId } });
-    if (!sp) {
-      return res.status(404).json({ message: 'Service Provider not found' });
+    const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId } });
+    if (!insurer) {
+      return res.status(404).json({ message: 'Insurer not found' });
     }
 
-    // RULE: SP only sees policy requests where farmer selected them (serviceProviderId matches)
+    // RULE: Insurer only sees policy requests where farmer selected them (insurerId matches)
     const requests = await prisma.policyRequest.findMany({
-      where: { serviceProviderId: sp.id },
+      where: { insurerId: insurer.id },
       include: {
         farmer: {
           select: { name: true, email: true, mobileNumber: true },
@@ -185,20 +225,61 @@ router.get('/policy-requests', authenticateToken, authorizeRoles(['SERVICE_PROVI
   }
 });
 
-// SP: Approve and issue policy from request
-router.post('/policy-requests/:id/issue', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Get a single policy request by ID
+router.get('/policy-requests/:id', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const requestId = req.params.id;
+    const { role, userId } = req;
+
+    const request = await prisma.policyRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        farmer: {
+          select: { id: true, name: true, email: true, mobileNumber: true },
+        },
+        insurer: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    if (!request) {
+      return res.status(404).json({ message: 'Policy request not found' });
+    }
+
+    // Check permissions
+    if (role === 'FARMER' && request.farmerId !== userId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    if (role === 'INSURER') {
+      const insurer = await prisma.insurer.findUnique({ where: { userId } });
+      if (!insurer || request.insurerId !== insurer.id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    res.json(request);
+  } catch (error) {
+    Logger.error('Error fetching policy request detail', { error, requestId: req.params.id, userId: req.userId });
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Insurer: Approve and issue policy from request
+router.post('/policy-requests/:id/issue', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const sp = await prisma.serviceProvider.findUnique({ where: { userId: req.userId } });
-    if (!sp || !sp.kycVerified) {
-      return res.status(403).json({ message: 'Service Provider not verified' });
+    const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId } });
+    if (!insurer || !insurer.kycVerified) {
+      return res.status(403).json({ message: 'Insurer not verified' });
     }
 
     const requestId = req.params.id;
-    const { policyNumber, startDate, endDate, premium, sumInsured } = req.body;
+    const { policyNumber, startDate, endDate, premium, sumInsured, cropDetails: editedCropDetails } = req.body;
 
     if (!policyNumber || !startDate || !endDate || !premium || !sumInsured) {
       return res.status(400).json({ message: 'All policy fields are required' });
@@ -208,7 +289,7 @@ router.post('/policy-requests/:id/issue', authenticateToken, authorizeRoles(['SE
       where: { id: requestId },
     });
 
-    if (!request || request.serviceProviderId !== sp.id) {
+    if (!request || request.insurerId !== insurer.id) {
       return res.status(404).json({ message: 'Policy request not found' });
     }
 
@@ -218,12 +299,36 @@ router.post('/policy-requests/:id/issue', authenticateToken, authorizeRoles(['SE
 
     // Create policy in transaction
     const result = await prisma.$transaction(async (tx) => {
+      // LAND LOCK: Prevent duplicate issuance for the same Khasra
+      const khasra = editedCropDetails?.surveyNumber || (request.cropDetails as any)?.surveyNumber;
+      if (khasra) {
+        const existingActivePolicy = await tx.policy.findFirst({
+          where: {
+            farmerId: request.farmerId,
+            landRecordKhasra: khasra,
+            status: 'Active',
+            endDate: { gte: new Date() }
+          }
+        });
+        if (existingActivePolicy) {
+          const error = new Error(`Land Lock Alert: Land plot (Khasra ${khasra}) is already covered under an active policy (${existingActivePolicy.policyNumber}).`);
+          (error as any).code = 'LAND_LOCKED';
+          throw error;
+        }
+      }
+
+      // Auto-generate policy number if somehow missing
+      const finalPolicyNumber = policyNumber && policyNumber.trim() !== ''
+        ? policyNumber
+        : `POL-ISS-${Date.now().toString().slice(-6)}`;
+
       // Create policy with images and crop details from request
       const policy = await tx.policy.create({
         data: {
-          policyNumber,
+          policyNumber: finalPolicyNumber,
           farmerId: request.farmerId,
-          serviceProviderId: sp.id,
+          insurerId: insurer.id,
+          landRecordKhasra: khasra || undefined, // Map Khasra to the policy record
           cropType: request.cropType,
           insuredArea: request.insuredArea,
           startDate: new Date(startDate),
@@ -235,9 +340,11 @@ router.post('/policy-requests/:id/issue', authenticateToken, authorizeRoles(['SE
           policyVerified: true,
           // Copy farm images from request to policy (for AI matching with claim images)
           policyImages: request.farmImages || undefined,
-          // Copy crop details from request
-          cropDetails: request.cropDetails || undefined,
-        },
+          // Copy documents from request (land records, etc.)
+          policyDocuments: request.documents || undefined,
+          // Use edited crop details if provided, else fallback to request data
+          cropDetails: editedCropDetails || request.cropDetails || undefined,
+        } as any,
       });
 
       // Update request status
@@ -253,27 +360,40 @@ router.post('/policy-requests/:id/issue', authenticateToken, authorizeRoles(['SE
     });
 
     await auditLogService.logFromRequest(req, 'policy_issued', { policyId: result.id, requestId }, 'policy', result.id);
+    Logger.policy.created('Policy issued from request', { policyId: result.id, requestId });
 
     res.status(201).json({ message: 'Policy issued successfully', policy: result });
   } catch (error: any) {
-    Logger.error('Error issuing policy', { error, requestId: req.params.id, userId: req.userId });
+    // Handle Prisma unique constraint violation
     if (error.code === 'P2002') {
-      return res.status(409).json({ message: 'Policy number already exists' });
+      return res.status(409).json({
+        message: 'Policy number already exists. Please provide a unique number.'
+      });
     }
-    res.status(500).json({ message: 'Server error' });
+
+    Logger.error('Error issuing policy from request', {
+      error: error.message,
+      requestId: req.params.id,
+      userId: req.userId
+    });
+
+    res.status(500).json({
+      message: 'Server error while issuing policy',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
-// SP: Reject policy request
-router.post('/policy-requests/:id/reject', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Insurer: Reject policy request
+router.post('/policy-requests/:id/reject', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const sp = await prisma.serviceProvider.findUnique({ where: { userId: req.userId } });
-    if (!sp) {
-      return res.status(404).json({ message: 'Service Provider not found' });
+    const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId } });
+    if (!insurer) {
+      return res.status(404).json({ message: 'Insurer not found' });
     }
 
     const requestId = req.params.id;
@@ -283,7 +403,7 @@ router.post('/policy-requests/:id/reject', authenticateToken, authorizeRoles(['S
       where: { id: requestId },
     });
 
-    if (!request || request.serviceProviderId !== sp.id) {
+    if (!request || request.insurerId !== insurer.id) {
       return res.status(404).json({ message: 'Policy request not found' });
     }
 
@@ -312,7 +432,7 @@ router.get('/policy-requests/all', authenticateToken, authorizeRoles(['ADMIN', '
         farmer: {
           select: { name: true, email: true, mobileNumber: true },
         },
-        serviceProvider: {
+        insurer: {
           select: { name: true, email: true },
         },
       },
@@ -341,7 +461,7 @@ router.get('/policy-requests/:requestId/documents/:documentIndex', authenticateT
       where: { id: requestId },
       include: {
         farmer: { select: { id: true } },
-        serviceProvider: { include: { user: { select: { id: true } } } },
+        insurer: { include: { user: { select: { id: true } } } },
       },
     });
 
@@ -349,12 +469,12 @@ router.get('/policy-requests/:requestId/documents/:documentIndex', authenticateT
       return res.status(404).json({ message: 'Policy request not found' });
     }
 
-    // Check permissions: farmer owns it, SP assigned to it, or admin
+    // Check permissions: farmer owns it, Insurer assigned to it, or admin
     const isFarmer = req.role === 'FARMER' && request.farmerId === req.userId;
-    const isSP = req.role === 'SERVICE_PROVIDER' && request.serviceProvider?.user?.id === req.userId;
+    const isInsurer = req.role === 'INSURER' && request.insurer?.user?.id === req.userId;
     const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.role || '');
 
-    if (!isFarmer && !isSP && !isAdmin) {
+    if (!isFarmer && !isInsurer && !isAdmin) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -416,7 +536,7 @@ router.get('/policy-requests/:requestId/farm-images/:imageIndex', authenticateTo
       where: { id: requestId },
       include: {
         farmer: { select: { id: true } },
-        serviceProvider: { include: { user: { select: { id: true } } } },
+        insurer: { include: { user: { select: { id: true } } } },
       },
     });
 
@@ -424,12 +544,12 @@ router.get('/policy-requests/:requestId/farm-images/:imageIndex', authenticateTo
       return res.status(404).json({ message: 'Policy request not found' });
     }
 
-    // Check permissions: farmer owns it, SP assigned to it, or admin
+    // Check permissions: farmer owns it, Insurer assigned to it, or admin
     const isFarmer = req.role === 'FARMER' && request.farmerId === req.userId;
-    const isSP = req.role === 'SERVICE_PROVIDER' && request.serviceProvider?.user?.id === req.userId;
+    const isInsurer = req.role === 'INSURER' && request.insurer?.user?.id === req.userId;
     const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.role || '');
 
-    if (!isFarmer && !isSP && !isAdmin) {
+    if (!isFarmer && !isInsurer && !isAdmin) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

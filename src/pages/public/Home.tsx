@@ -16,7 +16,7 @@ const Home = () => {
         >
           <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/85 to-background/50" />
         </div>
-        
+
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl animate-fade-in">
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full mb-6 border border-white/20">
@@ -33,9 +33,11 @@ const Home = () => {
               Streamlining agricultural insurance claims with AI and satellite verification for faster, fairer, and fraud-free processing.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button size="lg" className="text-lg px-8 group">
-                Get a Free Quote
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              <Button size="lg" className="text-lg px-8 group" asChild>
+                <Link to="/signup/farmer">
+                  Get a Free Quote
+                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </Link>
               </Button>
               <Button size="lg" variant="outline" asChild className="text-lg px-8">
                 <Link to="/services">Explore Coverage</Link>
@@ -108,7 +110,7 @@ const Home = () => {
               {
                 icon: Award,
                 title: "Enhanced Transparency",
-                description: "Clear and trustworthy process between farmers and service providers.",
+                description: "Clear and trustworthy process between farmers and insurers.",
                 color: "from-purple-500 to-pink-500"
               }
             ].map((feature, index) => (
@@ -150,7 +152,7 @@ const Home = () => {
               <p className="text-lg text-muted-foreground leading-relaxed">
                 Leveraging AI and satellite technology to provide accurate, efficient, and transparent crop insurance.
               </p>
-              
+
               <div className="space-y-4 pt-4">
                 {[
                   "AI-powered damage assessment for precise claims",
@@ -191,9 +193,11 @@ const Home = () => {
                 Get a personalized quote in minutes and discover how ClaimEasy can secure your agricultural future
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" variant="secondary" className="text-lg px-8 group">
-                  Get Free Quote
-                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                <Button size="lg" variant="secondary" className="text-lg px-8 group" asChild>
+                  <Link to="/signup/farmer">
+                    Get Free Quote
+                    <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  </Link>
                 </Button>
                 <Button size="lg" variant="outline" className="text-lg px-8 border-2 border-white text-white hover:bg-white/10" asChild>
                   <Link to="/contact">Contact Us</Link>

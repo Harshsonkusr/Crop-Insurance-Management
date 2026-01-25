@@ -7,10 +7,10 @@ const router = Router();
 // Get dashboard summary data (Admin and Super Admin only)
 router.get('/summary', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const [totalUsers, totalClaims, totalServiceProviders, claimsByStatus, recentAuditLogs] = await Promise.all([
+    const [totalUsers, totalClaims, totalInsurers, claimsByStatus, recentAuditLogs] = await Promise.all([
       prisma.user.count(),
       prisma.claim.count(),
-      prisma.serviceProvider.count(),
+      prisma.insurer.count(),
       prisma.claim.groupBy({
         by: ['status'],
         _count: { status: true },
@@ -18,11 +18,27 @@ router.get('/summary', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN'
       prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 5 }),
     ]);
 
+    const formattedClaimsByStatus = claimsByStatus.reduce((acc, c) => {
+      let status = c.status.toLowerCase();
+      // Map DB statuses to frontend categories
+      if (status === 'under_review' || status === 'in_progress' || status === 'inspected') {
+        status = 'in_review';
+      }
+
+      const existing = acc.find(item => item._id === status);
+      if (existing) {
+        existing.count += c._count.status;
+      } else {
+        acc.push({ _id: status, count: c._count.status });
+      }
+      return acc;
+    }, [] as { _id: string, count: number }[]);
+
     res.json({
       totalUsers,
       totalClaims,
-      totalServiceProviders,
-      claimsByStatus,
+      totalInsurers,
+      claimsByStatus: formattedClaimsByStatus,
       recentAuditLogs,
     });
   } catch (error) {
@@ -30,20 +46,20 @@ router.get('/summary', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN'
   }
 });
 
-// Get Service Provider dashboard overview
-router.get('/service-provider/overview', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Get Insurer dashboard overview
+router.get('/insurer/overview', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const serviceProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.userId } });
-    if (!serviceProvider) {
-      return res.status(404).json({ message: 'Service Provider profile not found' });
+    const insurer = await prisma.insurer.findUnique({ where: { userId: req.userId } });
+    if (!insurer) {
+      return res.status(404).json({ message: 'Insurer profile not found' });
     }
 
     // Get assigned claims
-    const serviceProviderId = serviceProvider.id;
+    const insurerId = insurer.id;
 
     const [
       totalClaimsAssigned,
@@ -51,40 +67,30 @@ router.get('/service-provider/overview', authenticateToken, authorizeRoles(['SER
       claimsApproved,
       claimsRejected,
       aiFlaggedClaims,
-      resolvedClaims,
+      pendingPayoutsData,
     ] = await Promise.all([
-      prisma.claim.count({ where: { assignedToId: serviceProviderId } }),
-      prisma.claim.count({ where: { assignedToId: serviceProviderId, status: 'pending' } }),
-      prisma.claim.count({ where: { assignedToId: serviceProviderId, status: 'approved' } }),
-      prisma.claim.count({ where: { assignedToId: serviceProviderId, status: 'rejected' } }),
+      prisma.claim.count({ where: { assignedToId: insurerId } }),
+      prisma.claim.count({ where: { assignedToId: insurerId, status: 'pending' } }),
+      prisma.claim.count({ where: { assignedToId: insurerId, status: 'approved' } }),
+      prisma.claim.count({ where: { assignedToId: insurerId, status: 'rejected' } }),
       prisma.claim.count({
         where: {
-          assignedToId: serviceProviderId,
-          verificationStatus: { in: ['Manual_Review', 'Pending'] },
+          assignedToId: insurerId,
+          verificationStatus: { in: ['fraud_suspect', 'Manual_Review', 'AI_Processed_Admin_Review'] },
         },
       }),
-      prisma.claim.findMany({
+      prisma.claim.aggregate({
         where: {
-          assignedToId: serviceProviderId,
-          status: { in: ['approved', 'rejected', 'resolved'] },
-          resolutionDate: { not: null },
+          assignedToId: insurerId,
+          status: 'approved',
         },
-        select: { resolutionDate: true, dateOfClaim: true },
+        _sum: {
+          amountClaimed: true,
+        },
       }),
     ]);
 
-    let averageVerificationTime = '0 days';
-    if (resolvedClaims.length > 0) {
-      const totalTime = resolvedClaims.reduce((sum, claim) => {
-        if (claim.resolutionDate && claim.dateOfClaim) {
-          return sum + (claim.resolutionDate.getTime() - claim.dateOfClaim.getTime());
-        }
-        return sum;
-      }, 0);
-      const avgTimeMs = totalTime / resolvedClaims.length;
-      const avgTimeDays = Math.round(avgTimeMs / (1000 * 60 * 60 * 24));
-      averageVerificationTime = `${avgTimeDays} days`;
-    }
+    const pendingPayouts = (pendingPayoutsData as any)?._sum?.amountClaimed || 0;
 
     // Count notifications/alerts (placeholder - can be enhanced with actual notification system)
     const notificationsAlerts = claimsPendingVerification + aiFlaggedClaims;
@@ -95,11 +101,11 @@ router.get('/service-provider/overview', authenticateToken, authorizeRoles(['SER
       claimsApproved,
       claimsRejected,
       aiFlaggedClaims,
-      averageVerificationTime,
+      pendingPayouts,
       notificationsAlerts,
     });
   } catch (error) {
-    console.error('Error fetching service provider dashboard:', error);
+    console.error('Error fetching insurer dashboard:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

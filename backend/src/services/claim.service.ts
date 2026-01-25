@@ -34,7 +34,7 @@ export class ClaimService {
     // Get policy data for AI matching (outside transaction)
     const policy = await prisma.policy.findUnique({
       where: { id: claimData.policyId },
-      include: { serviceProvider: true },
+      include: { insurer: true },
     });
 
     if (!policy) {
@@ -51,10 +51,16 @@ export class ClaimService {
       throw new Error('Policy is not active');
     }
 
+    // STRICT VALIDATION: Ensure incident date is within policy coverage period
+    const incidentDate = new Date(claimData.dateOfIncident);
+    if (incidentDate < policy.startDate || incidentDate > policy.endDate) {
+      throw new Error(`Incident date (${incidentDate.toLocaleDateString()}) must be within the policy coverage period (${policy.startDate.toLocaleDateString()} to ${policy.endDate.toLocaleDateString()}).`);
+    }
+
     // POLICY CONFLICT RESOLUTION: Check for multiple active policies covering same loss area
     // If multiple active policies exist, use chosen_policy_id or earliest matching insurer
     let chosenPolicyId: string | undefined = claimData.chosenPolicyId;
-    
+
     if (!chosenPolicyId) {
       // Check for multiple active policies for this farmer
       const activePolicies = await prisma.policy.findMany({
@@ -79,32 +85,48 @@ export class ClaimService {
       }
     }
 
-    // RULE: Auto-assign claim to the insurer (SP) who issued the policy
-    // INTERNAL POLICY CLAIM: Auto-route to SP who issued the internal policy
-    // EXTERNAL POLICY CLAIM: Auto-route to insurer who originally created that policy
-    // Both internal and external policies have serviceProviderId pointing to the insurer SP
-    const assignedToId = policy.serviceProviderId;
+    // DUPLICATE CLAIM PROTECTION: Prevent multiple claims for the same policy within a 7-day incident window
+    const possibleDuplicate = await prisma.claim.findFirst({
+      where: {
+        policyId: claimData.policyId,
+        dateOfIncident: {
+          gte: new Date(new Date(claimData.dateOfIncident).getTime() - 7 * 24 * 60 * 60 * 1000),
+          lte: new Date(new Date(claimData.dateOfIncident).getTime() + 7 * 24 * 60 * 60 * 1000),
+        },
+        status: { in: [ClaimStatus.pending, ClaimStatus.approved, ClaimStatus.in_progress, ClaimStatus.under_review, ClaimStatus.resolved, ClaimStatus.fraud_suspect] }
+      }
+    });
 
-    // Validate that service provider exists and is assigned
-    if (!assignedToId) {
-      throw new Error('Policy does not have an assigned service provider. Cannot create claim.');
+    if (possibleDuplicate) {
+      throw new Error(`A claim for this policy was already submitted near this date (Incident Date: ${new Date(possibleDuplicate.dateOfIncident).toLocaleDateString()}). Please check your existing claims.`);
     }
 
-    // Verify the service provider exists
-    const serviceProvider = await prisma.serviceProvider.findUnique({
+    // RULE: Auto-assign claim to the insurer who issued the policy
+    // INTERNAL POLICY CLAIM: Auto-route to Insurer who issued the internal policy
+    // EXTERNAL POLICY CLAIM: Auto-route to insurer who originally created that policy
+    // Both internal and external policies have insurerId
+    const assignedToId = policy.insurerId;
+
+    // Validate that insurer exists and is assigned
+    if (!assignedToId) {
+      throw new Error('Policy does not have an assigned insurer. Cannot create claim.');
+    }
+
+    // Verify the insurer exists
+    const insurer = await prisma.insurer.findUnique({
       where: { id: assignedToId },
     });
 
-    if (!serviceProvider) {
-      throw new Error(`Service provider with ID ${assignedToId} not found. Cannot assign claim.`);
+    if (!insurer) {
+      throw new Error(`Insurer with ID ${assignedToId} not found. Cannot assign claim.`);
     }
 
-    Logger.claim.created(`Creating claim for farmer ${farmerId}, assigning to SP ${assignedToId}`, {
+    Logger.claim.created(`Creating claim for farmer ${farmerId}, assigning to Insurer ${assignedToId} `, {
       farmerId,
       policyId: claimData.policyId,
       assignedToId,
-      policyServiceProviderId: policy.serviceProviderId,
-      serviceProviderName: serviceProvider.name
+      policyInsurerId: policy.insurerId,
+      insurerName: insurer.name
     });
 
     const created = await prisma.$transaction(async (tx) => {
@@ -208,18 +230,42 @@ export class ClaimService {
       }
     }
 
+    // AUTONOMOUS AI TRIGGER: Run AI analysis immediately (async)
+    // This removes the need for Admin to manually click "Analyze"
+    (async () => {
+      try {
+        const { MockAIService } = await import('./ai.service');
+        const aiReport = await MockAIService.analyzeClaim(created);
+
+        await prisma.claim.update({
+          where: { id: created.id },
+          data: {
+            verificationStatus: VerificationStatus.AI_Processed_Admin_Review,
+            aiDamagePercent: aiReport.damageAssessment.aiEstimatedDamage,
+            aiReport: aiReport as any,
+            aiValidationFlags: aiReport.fraudCheck.flags,
+            updatedAt: new Date()
+          }
+        });
+
+        Logger.info(`Autonomous AI analysis completed for claim ${created.id}`);
+      } catch (error) {
+        Logger.error('Autonomous AI analysis failed', { error, claimId: created.id });
+      }
+    })();
+
     const claimWithDocs = await prisma.claim.findUnique({
       where: { id: created.id },
-      include: { 
+      include: {
         documents: true,
-        policy: { select: { policyNumber: true, cropType: true, sumInsured: true, serviceProviderId: true } },
-        assignedTo: { 
-          select: { 
+        policy: { select: { policyNumber: true, cropType: true, sumInsured: true, insurerId: true } },
+        assignedTo: {
+          select: {
             id: true,
-            name: true, 
+            name: true,
             email: true,
             userId: true
-          } 
+          }
         },
         farmer: { select: { id: true, name: true, email: true, mobileNumber: true } },
       },
@@ -237,10 +283,10 @@ export class ClaimService {
         farmerId: claimWithDocs.farmerId,
         policyId: claimData.policyId
       });
-      throw new Error('Claim was created but not assigned to a service provider');
+      throw new Error('Claim was created but not assigned to an insurer');
     }
 
-    Logger.claim.created(`Claim retrieved after creation: ${claimWithDocs.claimId}`, {
+    Logger.claim.created(`Claim retrieved after creation: ${claimWithDocs.claimId} `, {
       claimId: claimWithDocs.id,
       claimIdFormatted: claimWithDocs.claimId,
       farmerId: claimWithDocs.farmerId,
@@ -267,8 +313,8 @@ export class ClaimService {
       skip,
       take: limit,
       include: {
-        farmer: { select: { name: true, email: true, mobileNumber: true } },
-        assignedTo: { select: { name: true, email: true, phone: true } },
+        farmer: { select: { id: true, name: true, email: true, mobileNumber: true } },
+        assignedTo: { select: { id: true, name: true, email: true, phone: true } },
       },
     });
     const totalClaims = await prisma.claim.count({ where });
@@ -279,8 +325,8 @@ export class ClaimService {
     const claim = await prisma.claim.findUnique({
       where: { id },
       include: {
-        farmer: { select: { name: true, email: true, mobileNumber: true } },
-        assignedTo: { select: { name: true, email: true, phone: true } },
+        farmer: { select: { id: true, name: true, email: true, mobileNumber: true } },
+        assignedTo: { select: { id: true, name: true, email: true, phone: true } },
         documents: true,
       },
     });
@@ -300,15 +346,15 @@ export class ClaimService {
   async getMyClaims(farmerId: string) {
     try {
       Logger.claim.created(`Fetching claims for farmer ${farmerId}`, { farmerId });
-      
+
       // First, check if there are any claims at all in the database
       const totalClaims = await prisma.claim.count();
-      Logger.claim.created(`Total claims in database: ${totalClaims}`, { totalClaims });
-      
+      Logger.claim.created(`Total claims in database: ${totalClaims} `, { totalClaims });
+
       // Check claims for this specific farmer
       const claimsCount = await prisma.claim.count({ where: { farmerId } });
-      Logger.claim.created(`Claims count for farmer ${farmerId}: ${claimsCount}`, { farmerId, claimsCount });
-      
+      Logger.claim.created(`Claims count for farmer ${farmerId}: ${claimsCount} `, { farmerId, claimsCount });
+
       // Get all claims for this farmer (without relations first to debug)
       const claimsRaw = await prisma.claim.findMany({
         where: { farmerId },
@@ -323,39 +369,39 @@ export class ClaimService {
         },
         orderBy: { createdAt: 'desc' },
       });
-      
-      Logger.claim.created(`Found ${claimsRaw.length} raw claims for farmer`, { 
-        farmerId, 
+
+      Logger.claim.created(`Found ${claimsRaw.length} raw claims for farmer`, {
+        farmerId,
         claimIds: claimsRaw.map(c => c.claimId),
         claimUuids: claimsRaw.map(c => c.id)
       });
-      
+
       // Now get full claims with relations
       const claims = await prisma.claim.findMany({
         where: { farmerId },
-        include: { 
-          farmer: { 
-            select: { 
+        include: {
+          farmer: {
+            select: {
               id: true,
-              name: true, 
-              email: true, 
-              mobileNumber: true 
-            } 
+              name: true,
+              email: true,
+              mobileNumber: true
+            }
           },
-          policy: { 
-            select: { 
+          policy: {
+            select: {
               id: true,
-              policyNumber: true, 
-              cropType: true, 
-              sumInsured: true 
-            } 
+              policyNumber: true,
+              cropType: true,
+              sumInsured: true
+            }
           },
-          assignedTo: { 
-            select: { 
+          assignedTo: {
+            select: {
               id: true,
-              name: true, 
-              email: true 
-            } 
+              name: true,
+              email: true
+            }
           },
           documents: {
             select: {
@@ -368,13 +414,13 @@ export class ClaimService {
         },
         orderBy: { createdAt: 'desc' },
       });
-      
+
       Logger.claim.created(`Retrieved ${claims.length} claims with relations for farmer ${farmerId}`, {
         farmerId,
         claimCount: claims.length,
         claimIds: claims.map(c => c.claimId || c.id)
       });
-      
+
       // Transform claims to include documents and images separately
       return claims.map(claim => ({
         ...claim,

@@ -29,7 +29,7 @@ import {
 import api from '../../lib/api';
 import logger from '../../utils/logger';
 
-interface ServiceProvider {
+interface Insurer {
   id: string;
   _id?: string;
   name: string;
@@ -45,35 +45,35 @@ interface ServiceProvider {
 
 const PolicyComparison: React.FC = () => {
   const navigate = useNavigate();
-  const [serviceProviders, setServiceProviders] = useState<ServiceProvider[]>([]);
+  const [insurers, setInsurers] = useState<Insurer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<Insurer | null>(null);
 
   useEffect(() => {
-    fetchServiceProviders();
+    fetchInsurers();
   }, []);
 
-  const fetchServiceProviders = async () => {
+  const fetchInsurers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get('/admin/service-providers/approved');
-      setServiceProviders(response.data || []);
-      logger.farmer.policy('Fetched service providers for comparison', { count: response.data?.length || 0 });
+      const response = await api.get('/admin/insurers/approved');
+      setInsurers(response.data || []);
+      logger.farmer.policy('Fetched insurers for comparison', { count: response.data?.length || 0 });
     } catch (err: any) {
-      logger.farmer.error('Error fetching service providers for comparison', { error: err });
+      logger.farmer.error('Error fetching insurers for comparison', { error: err });
       if (err?.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError('Failed to load service providers. Please try again.');
+        setError('Failed to load insurers. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRequestPolicy = (provider: ServiceProvider) => {
+  const handleRequestPolicy = (provider: Insurer) => {
     logger.farmer.policy('Selected provider for policy request', { providerId: provider.id || provider._id });
     navigate('/farmer-dashboard/policy-request', {
       state: {
@@ -111,7 +111,7 @@ const PolicyComparison: React.FC = () => {
       <div className="container mx-auto p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading service providers...</p>
+          <p className="text-gray-600">Loading insurers...</p>
         </div>
       </div>
     );
@@ -129,7 +129,7 @@ const PolicyComparison: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Compare Service Providers</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Compare Insurers</h1>
           <p className="text-gray-600">Choose the best insurance provider for your farming needs</p>
         </div>
       </div>
@@ -141,7 +141,7 @@ const PolicyComparison: React.FC = () => {
             <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Providers</h3>
             <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={fetchServiceProviders} variant="outline">
+            <Button onClick={fetchInsurers} variant="outline">
               Try Again
             </Button>
           </CardContent>
@@ -149,13 +149,13 @@ const PolicyComparison: React.FC = () => {
       )}
 
       {/* No Providers */}
-      {serviceProviders.length === 0 && !error && (
+      {insurers.length === 0 && !error && (
         <Card>
           <CardContent className="p-6 text-center">
             <Info className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">No Service Providers Available</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">No Insurers Available</h3>
             <p className="text-gray-600 mb-4">
-              There are currently no approved service providers available. Please check back later.
+              There are currently no approved insurers available. Please check back later.
             </p>
             <Button onClick={() => navigate('/farmer-dashboard/my-policies')}>
               Back to Policies
@@ -166,7 +166,7 @@ const PolicyComparison: React.FC = () => {
 
       {/* Providers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {serviceProviders.map((provider) => (
+        {insurers.map((provider) => (
           <Card key={provider.id || provider._id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -333,12 +333,12 @@ const PolicyComparison: React.FC = () => {
           <div className="flex items-start gap-3">
             <Info className="h-6 w-6 text-blue-600 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-blue-900 mb-2">Tips for Choosing a Provider</h3>
+              <h3 className="font-semibold text-blue-900 mb-2">Tips for Choosing an Insurer</h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Check if the provider is KYC verified and has a valid license</li>
+                <li>• Check if the insurer is KYC verified and has a valid license</li>
                 <li>• Review the service type to ensure it matches your farming needs</li>
-                <li>• Consider providers with local presence for better support</li>
-                <li>• Look for providers with good claim settlement history</li>
+                <li>• Consider insurers with local presence for better support</li>
+                <li>• Look for insurers with good claim settlement history</li>
                 <li>• Compare coverage options and premium rates</li>
               </ul>
             </div>

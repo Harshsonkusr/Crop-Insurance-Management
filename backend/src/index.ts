@@ -7,7 +7,7 @@ import { Logger } from './utils/logger';
 import { securityHeaders, rateLimiter } from './middleware/security';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
-import serviceProviderRoutes from './routes/serviceProvider.routes';
+import insurerRoutes from './routes/insurer.routes';
 import claimRoutes from './routes/claim.routes';
 import farmDetailsRoutes from './routes/farmDetails.routes';
 import policyRoutes from './routes/policy.routes';
@@ -15,7 +15,7 @@ import cropRoutes from './routes/crop.routes';
 import reportRoutes from './routes/report.routes';
 import auditLogRoutes from './routes/auditLog.routes';
 import systemSettingsRoutes from './routes/systemSettings.routes';
-import serviceProviderActionsRoutes from './routes/serviceProviderActions.routes';
+import insurerActionsRoutes from './routes/insurerActions.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import farmerRoutes from './routes/farmer.routes';
 import notificationRoutes from './routes/notification.routes';
@@ -48,7 +48,7 @@ const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     // In development, allow all localhost origins
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === undefined;
     if (isDevelopment) {
@@ -56,7 +56,7 @@ const corsOptions = {
         return callback(null, true);
       }
     }
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -67,10 +67,10 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
-    'Accept', 
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
     'Origin',
     'Idempotency-Key',  // Allow idempotency key header for claim submissions
     'idempotency-key'   // Also allow lowercase version
@@ -91,9 +91,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', userRoutes);
-app.use('/api/admin', serviceProviderRoutes);
+app.use('/api/admin', insurerRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/service-provider', serviceProviderActionsRoutes);
+app.use('/api/insurer', insurerActionsRoutes);
 app.use('/api', claimRoutes);
 app.use('/api', farmDetailsRoutes);
 app.use('/api', policyRoutes);
@@ -101,6 +101,7 @@ app.use('/api', cropRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/admin', auditLogRoutes);
 app.use('/api/admin', systemSettingsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api', farmerRoutes);
 app.use('/api', notificationRoutes);
@@ -109,8 +110,8 @@ app.use('/api', consentRoutes);
 app.use('/api', policyRequestRoutes);
 app.use('/api', sessionRoutes);
 app.use('/api/admin', deletionRoutes);
-// Mount service provider routes for farmer access to approved providers
-app.use('/api', serviceProviderRoutes);
+// Mount insurer routes for farmer access to approved providers
+app.use('/api', insurerRoutes);
 
 // Serve uploaded files (documents and images)
 const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
@@ -158,16 +159,16 @@ async function start() {
   try {
     await prisma.$connect();
     Logger.db.connect('Connected to PostgreSQL');
-    
+
     // Start background jobs
     const { policySyncJob } = await import('./jobs/policySync.job');
     const { retentionJob } = await import('./jobs/retention.job');
     const { metricsJob } = await import('./jobs/metrics.job');
-    
+
     policySyncJob.start();
     retentionJob.start();
     metricsJob.start();
-    
+
     app.listen(port, () => {
       Logger.system.start(`Server running on port ${port}`);
     });

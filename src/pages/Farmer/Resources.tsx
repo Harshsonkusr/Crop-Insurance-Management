@@ -2,10 +2,10 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  BookOpen, 
-  FileText, 
-  Shield, 
+import {
+  BookOpen,
+  FileText,
+  Shield,
   TrendingUp,
   AlertCircle,
   Download,
@@ -23,26 +23,26 @@ const Resources: React.FC = () => {
       bgColor: 'bg-blue-50',
       description: 'Step-by-step guides on how to submit various types of claims.',
       articles: [
-        { 
-          title: 'How to Submit a Crop Damage Claim', 
+        {
+          title: 'How to Submit a Crop Damage Claim',
           description: 'Complete guide to submitting crop damage claims with all required documents.',
           link: '/resources/crop-damage-claim',
           type: 'guide'
         },
-        { 
-          title: 'Understanding the Claim Process Flow', 
+        {
+          title: 'Understanding the Claim Process Flow',
           description: 'Learn about the complete claim processing workflow from submission to settlement.',
           link: '/resources/claim-process',
           type: 'guide'
         },
-        { 
-          title: 'Required Documents for Claims', 
+        {
+          title: 'Required Documents for Claims',
           description: 'Checklist of all documents needed for different types of insurance claims.',
           link: '/resources/claim-documents',
           type: 'checklist'
         },
-        { 
-          title: 'Photo Guidelines for Damage Claims', 
+        {
+          title: 'Photo Guidelines for Damage Claims',
           description: 'Best practices for taking photos that help with claim verification.',
           link: '/resources/photo-guidelines',
           type: 'guide'
@@ -56,26 +56,26 @@ const Resources: React.FC = () => {
       bgColor: 'bg-green-50',
       description: 'Detailed explanations of policy terms, coverage, and benefits.',
       articles: [
-        { 
-          title: 'Your Policy: Terms and Conditions Explained', 
+        {
+          title: 'Your Policy: Terms and Conditions Explained',
           description: 'Comprehensive explanation of policy terms, coverage limits, and exclusions.',
           link: '/resources/policy-terms',
           type: 'guide'
         },
-        { 
-          title: 'Maximizing Your Coverage Benefits', 
+        {
+          title: 'Maximizing Your Coverage Benefits',
           description: 'Tips on how to get the most out of your insurance coverage.',
           link: '/resources/coverage-benefits',
           type: 'tips'
         },
-        { 
-          title: 'Renewing Your Farm Insurance Policy', 
+        {
+          title: 'Renewing Your Farm Insurance Policy',
           description: 'Step-by-step guide to policy renewal and what to consider.',
           link: '/resources/policy-renewal',
           type: 'guide'
         },
-        { 
-          title: 'Understanding Premium Calculations', 
+        {
+          title: 'Understanding Premium Calculations',
           description: 'Learn how your insurance premium is calculated based on various factors.',
           link: '/resources/premium-calculation',
           type: 'guide'
@@ -89,20 +89,20 @@ const Resources: React.FC = () => {
       bgColor: 'bg-purple-50',
       description: 'Information about PMFBY and other government agricultural insurance schemes.',
       articles: [
-        { 
-          title: 'PMFBY: Complete Overview', 
+        {
+          title: 'PMFBY: Complete Overview',
           description: 'Everything you need to know about Pradhan Mantri Fasal Bima Yojana.',
           link: '/resources/pmfby-overview',
           type: 'info'
         },
-        { 
-          title: 'Eligibility Criteria for PMFBY', 
+        {
+          title: 'Eligibility Criteria for PMFBY',
           description: 'Check if you qualify for PMFBY and understand the requirements.',
           link: '/resources/pmfby-eligibility',
           type: 'info'
         },
-        { 
-          title: 'Government Subsidies and Benefits', 
+        {
+          title: 'Government Subsidies and Benefits',
           description: 'Available subsidies and financial assistance programs for farmers.',
           link: '/resources/government-subsidies',
           type: 'info'
@@ -116,20 +116,20 @@ const Resources: React.FC = () => {
       bgColor: 'bg-orange-50',
       description: 'Best practices and tips to prevent common farm damages.',
       articles: [
-        { 
-          title: 'Protecting Crops from Pests and Diseases', 
+        {
+          title: 'Protecting Crops from Pests and Diseases',
           description: 'Effective strategies to prevent and manage crop pests and diseases.',
           link: '/resources/crop-protection',
           type: 'tips'
         },
-        { 
-          title: 'Weather Preparedness for Farmers', 
+        {
+          title: 'Weather Preparedness for Farmers',
           description: 'How to prepare your farm for extreme weather conditions.',
           link: '/resources/weather-prep',
           type: 'tips'
         },
-        { 
-          title: 'Crop Insurance Best Practices', 
+        {
+          title: 'Crop Insurance Best Practices',
           description: 'Best practices for maintaining crop insurance and maximizing benefits.',
           link: '/resources/insurance-best-practices',
           type: 'tips'
@@ -143,20 +143,20 @@ const Resources: React.FC = () => {
       bgColor: 'bg-red-50',
       description: 'Information on available financial aid and grants for farmers.',
       articles: [
-        { 
-          title: 'Government Grants for Sustainable Farming', 
+        {
+          title: 'Government Grants for Sustainable Farming',
           description: 'Available grants and financial support for sustainable farming practices.',
           link: '/resources/sustainable-grants',
           type: 'info'
         },
-        { 
-          title: 'Emergency Relief Funds for Farmers', 
+        {
+          title: 'Emergency Relief Funds for Farmers',
           description: 'How to access emergency relief funds during natural disasters.',
           link: '/resources/emergency-funds',
           type: 'info'
         },
-        { 
-          title: 'Loan Schemes for Farmers', 
+        {
+          title: 'Loan Schemes for Farmers',
           description: 'Government loan schemes and financial assistance programs.',
           link: '/resources/farmer-loans',
           type: 'info'
@@ -264,7 +264,31 @@ const Resources: React.FC = () => {
             <Button
               variant="secondary"
               className="justify-start h-auto py-4"
-              onClick={() => alert('Downloading claim form...')}
+              onClick={() => {
+                const claimFormTemplate = `CROP INSURANCE CLAIM FORM (TEMPLATE)
+----------------------------------------
+Farmer Name: __________________________
+Policy Number: ________________________
+Date of Incident: _____________________
+
+Details of Damage:
+________________________________________
+________________________________________
+
+Signature: _____________________________
+Date: __________________________________
+`;
+                import('../../utils/download').then(({ downloadJSON }) => {
+                  const blob = new Blob([claimFormTemplate], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'Claim_Form_Template.txt';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                });
+              }}
             >
               <Download className="h-5 w-5 mr-2" />
               Download Claim Form

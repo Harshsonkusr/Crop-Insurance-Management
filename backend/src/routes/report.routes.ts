@@ -17,8 +17,8 @@ router.get('/claims-by-status', authenticateToken, authorizeRoles(['ADMIN']), as
   }
 });
 
-// Get claims by service provider (Admin only)
-router.get('/claims-by-service-provider', authenticateToken, authorizeRoles(['ADMIN']), async (req, res) => {
+// Get claims by insurer (Admin only)
+router.get('/claims-by-insurer', authenticateToken, authorizeRoles(['ADMIN']), async (req, res) => {
   try {
     const grouped = await prisma.claim.groupBy({
       by: ['assignedToId'],
@@ -27,15 +27,15 @@ router.get('/claims-by-service-provider', authenticateToken, authorizeRoles(['AD
     });
 
     const providerIds = grouped.map((g) => g.assignedToId!).filter(Boolean);
-    const providers = await prisma.serviceProvider.findMany({
+    const subscribers = await prisma.insurer.findMany({
       where: { id: { in: providerIds } },
       select: { id: true, name: true },
     });
-    const nameMap = new Map(providers.map((p) => [p.id, p.name]));
+    const nameMap = new Map(subscribers.map((p) => [p.id, p.name]));
 
     res.json(
       grouped.map((g) => ({
-        serviceProviderName: nameMap.get(g.assignedToId!) || 'Unknown',
+        insurerName: nameMap.get(g.assignedToId!) || 'Unknown',
         count: g._count.assignedToId,
       }))
     );

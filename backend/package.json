@@ -15,6 +15,7 @@
     "create-users": "node create-test-users.js",
     "test-api": "node test-backend.js",
     "clear:test-data": "dotenv -e .env -- ts-node scripts/clear-test-data.ts",
+    "clean:farmers": "dotenv -e .env -- ts-node scripts/clean-farmers.ts",
     "create:admin": "dotenv -e .env -- ts-node scripts/create-first-admin.ts"
   },
   "keywords": [],
@@ -34,6 +35,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.12",
     "pg": "^8.12.0",
     "twilio": "^5.11.1",
     "uuid": "^13.0.0"
@@ -46,6 +48,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.10.1",
+    "@types/nodemailer": "^7.0.5",
     "@types/pg": "^8.15.6",
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.48.1",

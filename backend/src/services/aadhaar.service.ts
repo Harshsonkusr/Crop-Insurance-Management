@@ -27,7 +27,7 @@ export class AadhaarService {
     if (!/^\d{12}$/.test(cleaned)) {
       throw new Error('Invalid Aadhaar format. Must be 12 digits.');
     }
-    
+
     const key = getHmacKey();
     const hash = crypto.createHmac('sha256', key).update(cleaned).digest('hex');
     return hash;
@@ -62,11 +62,11 @@ export class AadhaarService {
    */
   static async checkFarmerExists(aadhaar?: string, phone?: string, policyNumber?: string) {
     const conditions: any[] = [];
-    
+
     if (phone) {
       conditions.push({ mobileNumber: phone });
     }
-    
+
     if (aadhaar) {
       const hash = this.hashAadhaar(aadhaar);
       const farmDetails = await prisma.farmDetails.findUnique({
@@ -76,7 +76,7 @@ export class AadhaarService {
       if (farmDetails) {
         conditions.push({ id: farmDetails.farmerId });
       }
-      
+
       // Also check for policies linked to this Aadhaar hash
       const policiesByAadhaar = await prisma.policy.findMany({
         where: {
@@ -88,13 +88,13 @@ export class AadhaarService {
         },
         select: { farmerId: true },
       });
-      
+
       if (policiesByAadhaar.length > 0) {
         const farmerIds = [...new Set(policiesByAadhaar.map(p => p.farmerId))];
         conditions.push({ id: { in: farmerIds } });
       }
     }
-    
+
     // Check by policy number if provided
     if (policyNumber) {
       const policy = await prisma.policy.findUnique({
@@ -105,9 +105,9 @@ export class AadhaarService {
         conditions.push({ id: policy.farmerId });
       }
     }
-    
+
     if (conditions.length === 0) return null;
-    
+
     return await prisma.user.findFirst({
       where: {
         OR: conditions,
@@ -116,7 +116,7 @@ export class AadhaarService {
       include: {
         policies: {
           where: { status: 'Active' },
-          select: { id: true, policyNumber: true, serviceProvider: { select: { name: true } } },
+          select: { id: true, policyNumber: true, insurer: { select: { name: true } } },
         },
       },
     });
@@ -127,7 +127,7 @@ export class AadhaarService {
    */
   static async storeAadhaarHash(farmerId: string, aadhaar: string) {
     const hash = this.hashAadhaar(aadhaar);
-    
+
     await prisma.farmDetails.upsert({
       where: { farmerId },
       update: { aadhaarHash: hash },
@@ -136,7 +136,7 @@ export class AadhaarService {
         aadhaarHash: hash,
       },
     });
-    
+
     return hash;
   }
 }

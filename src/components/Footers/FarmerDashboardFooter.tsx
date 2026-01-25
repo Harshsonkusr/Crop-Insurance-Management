@@ -10,7 +10,7 @@ const FarmerDashboardFooter = () => {
         <div className="flex items-center gap-2">
           <span>© {currentYear} ClaimEasy – Farmer Portal</span>
           <span className="hidden sm:inline">|</span>
-          <span className="text-gray-500">Need help? Contact your Service Provider or District Office.</span>
+          <span className="text-gray-500">Need help? Contact your Insurer or District Office.</span>
         </div>
         <Link
           to="/farmer-dashboard/support"

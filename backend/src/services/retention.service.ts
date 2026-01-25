@@ -20,11 +20,11 @@ export class RetentionService {
    * Soft delete a claim (marks as deleted, doesn't remove from DB)
    */
   static async softDeleteClaim(claimId: string, deletedBy: string): Promise<void> {
-    await prisma.claim.update({
+    await (prisma.claim as any).update({
       where: { id: claimId },
       data: {
-        // Add deletedAt field if it exists in schema, or use status
-        status: 'deleted' as any,
+        deletedAt: new Date(),
+        status: 'cancelled' as any, // Consistent with status enum
       },
     });
 
@@ -38,12 +38,9 @@ export class RetentionService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - this.RETENTION_PERIODS.claims);
 
-    // Find old claims (older than retention period)
-    // In production, filter by deletedAt field
-    const oldClaims = await prisma.claim.findMany({
+    const oldClaims = await (prisma.claim as any).findMany({
       where: {
-        createdAt: { lt: cutoffDate },
-        // Add filter for soft-deleted claims if deletedAt field exists
+        deletedAt: { lt: cutoffDate, not: null },
       },
       take: 100, // Process in batches
     });
@@ -65,6 +62,48 @@ export class RetentionService {
 
     Logger.system.retention(`Permanently deleted ${deletedCount} old claims`);
     return deletedCount;
+  }
+
+  /**
+   * Permanently delete old soft-deleted users
+   */
+  static async deleteOldUsers(): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days for users (demo retention)
+
+    const oldUsers = await (prisma.user as any).findMany({
+      where: {
+        deletedAt: { lt: cutoffDate, not: null },
+      },
+      take: 100,
+    });
+
+    for (const user of oldUsers) {
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+
+    return oldUsers.length;
+  }
+
+  /**
+   * Permanently delete old soft-deleted insurers
+   */
+  static async deleteOldInsurers(): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days
+
+    const oldInsurers = await (prisma.insurer as any).findMany({
+      where: {
+        deletedAt: { lt: cutoffDate, not: null },
+      },
+      take: 100,
+    });
+
+    for (const insurer of oldInsurers) {
+      await prisma.insurer.delete({ where: { id: insurer.id } });
+    }
+
+    return oldInsurers.length;
   }
 
   /**
@@ -152,13 +191,17 @@ export class RetentionService {
   static async runRetentionCleanup(): Promise<void> {
     try {
       Logger.system.retention('Starting retention cleanup job');
-      
+
       const deletedClaims = await this.deleteOldClaims();
       const archivedImages = await this.archiveOldImages();
-      
+      const deletedUsers = await this.deleteOldUsers();
+      const deletedInsurers = await this.deleteOldInsurers();
+
       Logger.system.retention('Retention cleanup completed', {
         deletedClaims,
         archivedImages,
+        deletedUsers,
+        deletedInsurers,
       });
     } catch (error) {
       Logger.error('Error in retention cleanup', { error });

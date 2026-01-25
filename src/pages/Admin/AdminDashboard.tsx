@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Users, 
-  Building2, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
+  Building2,
+  BarChart3,
+  Settings,
   ScrollText,
   Menu,
   X,
@@ -76,7 +76,7 @@ const AdminDashboard = () => {
     { name: 'Dashboard', path: '/admin-dashboard', icon: LayoutDashboard },
     { name: 'Manage Claims', path: '/admin-dashboard/claims', icon: FileText },
     { name: 'Manage Farmers', path: '/admin-dashboard/users', icon: Users },
-    { name: 'Service Providers', path: '/admin-dashboard/service-providers', icon: Building2 },
+    { name: 'Insurers', path: '/admin-dashboard/insurers', icon: Building2 },
     { name: 'Reports & Analytics', path: '/admin-dashboard/reports', icon: BarChart3 },
     { name: 'System Settings', path: '/admin-dashboard/settings', icon: Settings },
     { name: 'Audit Log', path: '/admin-dashboard/audit-log', icon: ScrollText },
@@ -93,7 +93,7 @@ const AdminDashboard = () => {
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
@@ -148,8 +148,8 @@ const AdminDashboard = () => {
                 className={`
                   flex items-center gap-3 px-4 py-3 mb-2 rounded-lg
                   transition-all duration-200
-                  ${active 
-                    ? 'bg-blue-600 text-white shadow-lg' 
+                  ${active
+                    ? 'bg-blue-600 text-white shadow-lg'
                     : 'text-blue-100 hover:bg-blue-600/50 hover:text-white'
                   }
                 `}
@@ -202,7 +202,7 @@ const AdminDashboard = () => {
               <Logo variant="navbar" className="!bg-transparent" />
             </div>
           </div>
-          
+
           <div className="flex items-center gap-4 ml-auto">
             {/* Notification Bell */}
             <button className="p-2 rounded-lg hover:bg-gray-100 relative">
@@ -256,7 +256,7 @@ const AdminDashboard = () => {
         <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
           <Outlet />
         </main>
-        
+
         {/* Footer */}
         <AdminDashboardFooter />
       </div>

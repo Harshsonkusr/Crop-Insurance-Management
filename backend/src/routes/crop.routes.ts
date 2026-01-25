@@ -4,23 +4,23 @@ import { prisma } from '../db';
 
 const router = Router();
 
-// Helper to get service provider ID from user ID
-const getServiceProviderId = async (userId: string): Promise<string | null> => {
-  const serviceProvider = await prisma.serviceProvider.findUnique({ where: { userId } });
-  return serviceProvider ? serviceProvider.id : null;
+// Helper to get insurer ID from user ID
+const getInsurerId = async (userId: string): Promise<string | null> => {
+  const insurer = await prisma.insurer.findUnique({ where: { userId } });
+  return insurer ? insurer.id : null;
 };
 
-// Get crops managed by authenticated service provider (Service Provider only)
-router.get('/crops', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Get crops managed by authenticated insurer (Insurer only)
+router.get('/crops', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const serviceProviderId = await getServiceProviderId(req.userId);
-    if (!serviceProviderId) {
-      return res.status(404).json({ message: 'Service Provider profile not found' });
+    const insurerId = await getInsurerId(req.userId);
+    if (!insurerId) {
+      return res.status(404).json({ message: 'Insurer profile not found' });
     }
-    const crops = await prisma.crop.findMany({ where: { serviceProviderId } });
+    const crops = await prisma.crop.findMany({ where: { insurerId } });
     res.json(crops);
   } catch (error) {
     console.error('Error fetching crops:', error);
@@ -28,20 +28,20 @@ router.get('/crops', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), as
   }
 });
 
-// Get crops by service provider ID (for admin/service provider viewing)
-router.get('/service-provider/:serviceProviderId/crops', authenticateToken, authorizeRoles(['SERVICE_PROVIDER', 'ADMIN']), async (req: AuthRequest, res) => {
+// Get crops by insurer ID (for admin/insurer viewing)
+router.get('/insurer/:insurerId/crops', authenticateToken, authorizeRoles(['INSURER', 'ADMIN']), async (req: AuthRequest, res) => {
   try {
-    const { serviceProviderId } = req.params;
-    
-    // If not admin, verify the service provider ID belongs to the authenticated user
-    if (req.role === 'SERVICE_PROVIDER' && req.userId) {
-      const userServiceProviderId = await getServiceProviderId(req.userId);
-      if (!userServiceProviderId || userServiceProviderId.toString() !== serviceProviderId) {
+    const { insurerId } = req.params;
+
+    // If not admin, verify the insurer ID belongs to the authenticated user
+    if (req.role === 'INSURER' && req.userId) {
+      const userInsurerId = await getInsurerId(req.userId);
+      if (!userInsurerId || userInsurerId.toString() !== insurerId) {
         return res.status(403).json({ message: 'Access denied' });
       }
     }
-    
-    const crops = await prisma.crop.findMany({ where: { serviceProviderId } });
+
+    const crops = await prisma.crop.findMany({ where: { insurerId } });
     res.json(crops);
   } catch (error) {
     console.error('Error fetching crops:', error);
@@ -49,17 +49,17 @@ router.get('/service-provider/:serviceProviderId/crops', authenticateToken, auth
   }
 });
 
-// Add a new crop (Service Provider only)
-router.post('/crops', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), async (req: AuthRequest, res) => {
+// Add a new crop (Insurer only)
+router.post('/crops', authenticateToken, authorizeRoles(['INSURER']), async (req: AuthRequest, res) => {
   const { name, description, expectedYield, cultivationSeason } = req.body;
 
   try {
     if (!req.userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const serviceProviderId = await getServiceProviderId(req.userId);
-    if (!serviceProviderId) {
-      return res.status(404).json({ message: 'Service Provider profile not found' });
+    const insurerId = await getInsurerId(req.userId);
+    if (!insurerId) {
+      return res.status(404).json({ message: 'Insurer profile not found' });
     }
 
     const newCrop = await prisma.crop.create({
@@ -68,7 +68,7 @@ router.post('/crops', authenticateToken, authorizeRoles(['SERVICE_PROVIDER']), a
         description,
         expectedYield,
         cultivationSeason,
-        serviceProviderId,
+        insurerId,
       },
     });
     res.status(201).json({ message: 'Crop added successfully', crop: newCrop });

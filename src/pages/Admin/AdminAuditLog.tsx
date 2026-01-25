@@ -43,21 +43,21 @@ const AdminAuditLog = () => {
     try {
       setLoading(true);
       setError(null); // Clear any previous errors
-      
+
       // Use the audit logs endpoint
       const params: any = {
         page: currentPage,
         limit: itemsPerPage,
       };
-      
+
       if (searchTerm) {
         params.search = searchTerm;
       }
-      
+
       if (filterAction !== 'all') {
         params.action = filterAction;
       }
-      
+
       console.log('Fetching audit logs with params:', params);
       const response = await api.get('/admin/audit-logs', { params });
       if (response.data.auditLogs) {
@@ -81,7 +81,7 @@ const AdminAuditLog = () => {
     } catch (err: any) {
       console.error("Error fetching audit logs:", err);
       let errorMessage = "Failed to fetch audit logs.";
-      
+
       // Handle network errors
       if (err?.code === 'ECONNREFUSED' || err?.code === 'ERR_NETWORK' || err?.message?.includes('Network Error')) {
         errorMessage = "Cannot connect to server. Please ensure the backend server is running.";
@@ -96,7 +96,7 @@ const AdminAuditLog = () => {
       } else if (err?.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -116,7 +116,7 @@ const AdminAuditLog = () => {
     } else if (activeTab === 'service-providers') {
       filtered = filtered.filter(log => {
         const userRole = log.userId?.role || (log.details as any)?.role || '';
-        return userRole === 'SERVICE_PROVIDER' || (log.action && (log.action.includes('Service Provider') || log.action.includes('SERVICE_PROVIDER')));
+        return userRole === 'INSURER' || userRole === 'SERVICE_PROVIDER' || (log.action && (log.action.includes('Insurer') || log.action.includes('INSURER') || log.action.includes('Service Provider')));
       });
     } else if (activeTab === 'admins') {
       filtered = filtered.filter(log => {
@@ -158,7 +158,7 @@ const AdminAuditLog = () => {
     if (!role) return null;
     const config: Record<string, { label: string; className: string }> = {
       'FARMER': { label: 'Farmer', className: 'bg-green-100 text-green-800' },
-      'SERVICE_PROVIDER': { label: 'SP', className: 'bg-purple-100 text-purple-800' },
+      'INSURER': { label: 'Insurer', className: 'bg-purple-100 text-purple-800' },
       'ADMIN': { label: 'Admin', className: 'bg-blue-100 text-blue-800' },
       'SUPER_ADMIN': { label: 'Super Admin', className: 'bg-red-100 text-red-800' },
     };
@@ -181,8 +181,13 @@ const AdminAuditLog = () => {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Audit Log</h1>
-        <p className="text-gray-600 mt-1">View system activity and user actions</p>
+        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3 tracking-tight">
+          <span className="p-2 bg-blue-100 rounded-lg text-blue-700">
+            <ScrollText className="h-8 w-8" />
+          </span>
+          Audit Log
+        </h1>
+        <p className="text-gray-600 mt-1 ml-14">View system activity and user actions</p>
       </div>
 
       {/* Tabs for different user types */}
@@ -198,9 +203,9 @@ const AdminAuditLog = () => {
             <User className="h-4 w-4 mr-2" />
             Farmers
           </TabsTrigger>
-          <TabsTrigger value="service-providers">
+          <TabsTrigger value="insurers">
             <Building2 className="h-4 w-4 mr-2" />
-            Service Providers
+            Insurers
           </TabsTrigger>
           {isSuperAdmin && (
             <TabsTrigger value="admins">
@@ -242,8 +247,7 @@ const AdminAuditLog = () => {
           />
         </TabsContent>
 
-        {/* Service Providers Tab */}
-        <TabsContent value="service-providers" className="space-y-4 mt-6">
+        <TabsContent value="insurers" className="space-y-4 mt-6">
           <AuditLogContent
             logs={filteredLogs}
             searchTerm={searchTerm}
@@ -305,30 +309,32 @@ const AuditLogContent = ({
   return (
     <>
       {/* Filters */}
-      <Card>
+      <Card className="border-none shadow-md">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 type="text"
                 placeholder="Search by user, action, details..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-9 bg-gray-50/50 border-gray-100 focus:bg-white transition-all"
               />
             </div>
             <Select value={filterAction} onValueChange={setFilterAction}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filter by action" />
+              <SelectTrigger className="w-full sm:w-[220px] bg-gray-50/50 border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-gray-400" />
+                  <SelectValue placeholder="System Action" />
+                </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                <SelectItem value="User Login">User Login</SelectItem>
-                <SelectItem value="User Logout">User Logout</SelectItem>
-                <SelectItem value="Claim Created">Claim Created</SelectItem>
-                <SelectItem value="System Setting Update">System Setting Update</SelectItem>
+                <SelectItem value="all">All System Actions</SelectItem>
+                <SelectItem value="User Login">Authentications (Login)</SelectItem>
+                <SelectItem value="User Logout">Sessions (Logout)</SelectItem>
+                <SelectItem value="Claim Created">Filing (Claim Created)</SelectItem>
+                <SelectItem value="System Setting Update">Core Configurations</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -337,60 +343,95 @@ const AuditLogContent = ({
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">{error}</p>
-        </div>
+        <Card className="border-red-100 bg-red-50 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Activity className="h-5 w-5 text-red-500" />
+            <p className="text-red-800 font-medium text-sm">{error}</p>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Audit Logs List */}
+      {/* Audit Logs List - Standardized Table */}
       {logs.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <ScrollText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 text-lg font-medium">No audit logs found</p>
-            <p className="text-gray-500 mt-2">
-              {searchTerm || filterAction !== 'all' 
-                ? 'Try adjusting your search or filter criteria.'
-                : 'No activity has been logged yet.'}
+        <Card className="border-none shadow-lg">
+          <CardContent className="p-16 text-center">
+            <ScrollText className="h-16 w-16 text-gray-200 mx-auto mb-4" />
+            <p className="text-gray-800 text-xl font-bold tracking-tight">Zero Activity Detected</p>
+            <p className="text-gray-500 mt-2 max-w-xs mx-auto">
+              {searchTerm || filterAction !== 'all'
+                ? 'No logs match your current search or filter parameters.'
+                : 'The system audit logs are currently empty. Activity will appear here as users interact with the platform.'}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {logs.map((log) => (
-            <Card key={log._id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    {getActionIcon(log.action)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span className="font-medium text-gray-900">{log.user || 'System'}</span>
-                          {getRoleBadge(log.userId?.role || (log.details as any)?.role)}
+        <Card className="overflow-hidden border-none shadow-xl bg-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-blue-600 border-b border-blue-700">
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">User / Identity</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Action Sequence</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest">Context / IP</th>
+                  <th className="px-6 py-5 text-[10px] font-bold text-white uppercase tracking-widest text-right">Timestamp (IST)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 bg-white">
+                {logs.map((log) => (
+                  <tr key={log._id} className="hover:bg-blue-50/50 transition-all group border-l-4 border-transparent hover:border-blue-500">
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-700 font-bold border border-blue-100 shadow-sm transition-transform group-hover:scale-105">
+                          {(log.user || 'S').charAt(0).toUpperCase()}
                         </div>
-                        <p className="font-semibold text-gray-900 mb-1">{log.action}</p>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-900 tracking-tight group-hover:text-blue-700 transition-colors">{log.user || 'System'}</span>
+                          <div className="mt-0.5">
+                            {getRoleBadge(log.userId?.role || (log.details as any)?.role)}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-gray-50 group-hover:bg-white border border-transparent group-hover:border-gray-100 shadow-sm transition-all text-gray-600">
+                          {getActionIcon(log.action)}
+                        </div>
+                        <span className="font-semibold text-gray-800 tracking-tight">{log.action}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex flex-col gap-1 max-w-[300px]">
                         {log.details && typeof log.details === 'string' && (
-                          <p className="text-sm text-gray-600">{log.details}</p>
+                          <p className="text-sm font-medium text-gray-600 truncate group-hover:whitespace-normal transition-all" title={log.details}>
+                            {log.details}
+                          </p>
                         )}
                         {log.ipAddress && (
-                          <p className="text-xs text-gray-500 mt-1">IP: {log.ipAddress}</p>
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-tight">
+                            <Activity className="h-3 w-3" />
+                            <span>NODE: {log.ipAddress}</span>
+                          </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 flex-shrink-0">
-                        <Clock className="h-4 w-4" />
-                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-1.5 text-sm font-bold text-gray-800">
+                          <Clock className="h-3.5 w-3.5 text-gray-400" />
+                          <span>{new Date(log.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </span>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </>
   );

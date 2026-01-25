@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { 
-  UploadCloud, 
-  Image as ImageIcon, 
-  MapPin, 
+import {
+  UploadCloud,
+  Image as ImageIcon,
+  MapPin,
   Calendar,
   FileText,
   CheckCircle2,
@@ -33,13 +33,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import api from '../../lib/api';
+import logger from '../../utils/logger';
 
 interface ClaimFormData {
   policyId: string;
   dateOfIncident: string;
+  timeOfIncident: string;
+  typeOfPeril: string;
+  affectedArea: string;
+  estimatedLossPercentage: string;
   location: string;
   description: string;
   amountClaimed: string;
+  cropGrowthStage: string;
 }
 
 interface Policy {
@@ -59,9 +65,14 @@ const ClaimSubmission = () => {
   const [formData, setFormData] = useState<ClaimFormData>({
     policyId: '',
     dateOfIncident: '',
+    timeOfIncident: '',
+    typeOfPeril: '',
+    affectedArea: '',
+    estimatedLossPercentage: '',
     location: '',
     description: '',
     amountClaimed: '',
+    cropGrowthStage: '',
   });
   const [documents, setDocuments] = useState<File[]>([]);
   const [images, setImages] = useState<File[]>([]);
@@ -78,20 +89,35 @@ const ClaimSubmission = () => {
     if (claimId) {
       fetchExistingClaim();
     }
+    // Auto-prefill from farmer profile
+    (async () => {
+      try {
+        const res = await api.get('/farmer/profile');
+        const d = res.data?.farmInfo;
+        if (!d) return;
+        setFormData(prev => ({
+          ...prev,
+          location: prev.location || d.location || (d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : prev.location),
+          affectedArea: prev.affectedArea || (d.landAreaSize || d.area?.toString() || prev.affectedArea),
+        }));
+      } catch (err) {
+        console.error('Error pre-filling from profile', err);
+      }
+    })();
   }, [claimId]);
 
   const fetchPolicies = async () => {
     try {
       const response = await api.get('/farmer/policies');
       const activePolicies = response.data.filter((p: Policy) => p.status === 'Active');
-      
+
       // POLICY CONFLICT RESOLUTION: Check for multiple active policies
       // If multiple policies exist, show selection UI
       if (activePolicies.length > 1 && formData.dateOfIncident) {
         // Multiple policies found - user should select one
         // The UI will show all policies in the dropdown
       }
-      
+
       setPolicies(activePolicies);
     } catch (err) {
       console.error('Error fetching policies:', err);
@@ -102,13 +128,14 @@ const ClaimSubmission = () => {
     try {
       const response = await api.get(`/claims/farmer/${claimId}`);
       const claim = response.data;
-      setFormData({
+      setFormData(prev => ({
+        ...prev,
         policyId: claim.policyId?.id || claim.policyId?._id || claim.policyId || '',
         dateOfIncident: claim.dateOfIncident ? new Date(claim.dateOfIncident).toISOString().split('T')[0] : '',
         location: claim.locationOfIncident || '',
         description: claim.description || '',
         amountClaimed: claim.amountClaimed?.toString() || '',
-      });
+      }));
     } catch (err) {
       console.error('Error fetching claim:', err);
     }
@@ -178,22 +205,53 @@ const ClaimSubmission = () => {
   };
 
   const validateStep = (step: number): boolean => {
+    const now = new Date();
+    const incidentDateObj = formData.dateOfIncident ? new Date(formData.dateOfIncident) : null;
+    const diffInHours = incidentDateObj ? (now.getTime() - incidentDateObj.getTime()) / (1000 * 60 * 60) : null;
     switch (step) {
       case 1:
         if (!formData.policyId || !formData.dateOfIncident) {
           setError('Please select a policy and enter the incident date.');
           return false;
         }
+
+        // PMFBY 72-hour validation check
+        if (diffInHours !== null && diffInHours > 72) {
+          // We still allow submission but warn the user
+          logger.farmer.claim('Claim submitted after 72 hours', { diffInHours });
+        }
         return true;
       case 2:
+        if (!formData.typeOfPeril) {
+          setError('Please select the type of peril.');
+          return false;
+        }
+        if (!formData.cropGrowthStage) {
+          setError('Please select the crop growth stage.');
+          return false;
+        }
+        if (!formData.affectedArea || parseFloat(formData.affectedArea) <= 0) {
+          setError('Please enter a valid affected area.');
+          return false;
+        }
+        if (!formData.estimatedLossPercentage || parseFloat(formData.estimatedLossPercentage) <= 0) {
+          setError('Please enter an estimated loss percentage.');
+          return false;
+        }
         if (!formData.location || !formData.description) {
           setError('Please provide location and description of the incident.');
           return false;
         }
+
+        // PMFBY 72-hour validation check (Mandatory check before proceeding)
+        if (diffInHours !== null && diffInHours > 72 && !formData.description.toLowerCase().includes('reason for delay')) {
+          setError('For claims submitted after 72 hours, please include "Reason for delay:" in the description as per PMFBY guidelines.');
+          return false;
+        }
         return true;
       case 3:
-        if (images.length === 0) {
-          setError('Please upload at least one image of the damage.');
+        if (images.length < 2) {
+          setError('Please upload at least 2 images of the damage from different angles.');
           return false;
         }
         return true;
@@ -236,9 +294,14 @@ const ClaimSubmission = () => {
       const formDataToSend = new FormData();
       formDataToSend.append('policyId', formData.policyId);
       formDataToSend.append('dateOfIncident', formData.dateOfIncident);
+      formDataToSend.append('timeOfIncident', formData.timeOfIncident);
+      formDataToSend.append('typeOfPeril', formData.typeOfPeril);
+      formDataToSend.append('affectedArea', formData.affectedArea);
+      formDataToSend.append('estimatedLossPercentage', formData.estimatedLossPercentage);
       formDataToSend.append('location', formData.location);
       formDataToSend.append('description', formData.description);
       formDataToSend.append('amountClaimed', formData.amountClaimed);
+      formDataToSend.append('cropGrowthStage', formData.cropGrowthStage);
 
       documents.forEach((doc) => {
         formDataToSend.append('documents', doc);
@@ -253,12 +316,12 @@ const ClaimSubmission = () => {
           'Idempotency-Key': idempotencyKey
         }
       });
-      
+
       // Close dialog and show success message
       setIsConfirmDialogOpen(false);
       setSuccess(`Claim submitted successfully! Your claim (ID: ${response.data.claim?.claimId || 'N/A'}) has been sent to the insurance company and is being processed. You will be redirected to your claims page shortly.`);
       setIsSubmitting(false);
-      
+
       // Show success message for longer before redirecting
       setTimeout(() => {
         navigate('/farmer-dashboard/my-claims');
@@ -300,18 +363,17 @@ const ClaimSubmission = () => {
               const StepIcon = step.icon;
               const isActive = currentStep === step.number;
               const isCompleted = currentStep > step.number;
-              
+
               return (
                 <React.Fragment key={step.number}>
                   <div className="flex flex-col items-center flex-1">
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all ${
-                        isActive
-                          ? 'bg-green-600 border-green-600 text-white'
-                          : isCompleted
+                      className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all ${isActive
+                        ? 'bg-green-600 border-green-600 text-white'
+                        : isCompleted
                           ? 'bg-green-100 border-green-600 text-green-600'
                           : 'bg-gray-100 border-gray-300 text-gray-400'
-                      }`}
+                        }`}
                     >
                       {isCompleted ? (
                         <CheckCircle2 className="h-6 w-6" />
@@ -319,16 +381,14 @@ const ClaimSubmission = () => {
                         <StepIcon className="h-6 w-6" />
                       )}
                     </div>
-                    <p className={`mt-2 text-xs font-medium text-center ${
-                      isActive ? 'text-green-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
-                    }`}>
+                    <p className={`mt-2 text-xs font-medium text-center ${isActive ? 'text-green-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
+                      }`}>
                       {step.title}
                     </p>
                   </div>
                   {index < steps.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-2 ${
-                      isCompleted ? 'bg-green-600' : 'bg-gray-300'
-                    }`} />
+                    <div className={`flex-1 h-0.5 mx-2 ${isCompleted ? 'bg-green-600' : 'bg-gray-300'
+                      }`} />
                   )}
                 </React.Fragment>
               );
@@ -403,7 +463,7 @@ const ClaimSubmission = () => {
                 </Select>
                 {policies.length === 0 && (
                   <p className="mt-2 text-sm text-amber-600">
-                    You need an active policy to submit a claim. Please contact your service provider.
+                    You need an active policy to submit a claim. Please contact your insurer.
                   </p>
                 )}
               </div>
@@ -432,27 +492,148 @@ const ClaimSubmission = () => {
                 </div>
               )}
 
-              <div>
-                <Label htmlFor="dateOfIncident" className="text-base font-semibold">
-                  Date of Incident <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="dateOfIncident"
-                  name="dateOfIncident"
-                  type="date"
-                  value={formData.dateOfIncident}
-                  onChange={handleInputChange}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="mt-2 h-12"
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="dateOfIncident" className="text-base font-semibold">
+                    Date of Incident <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="dateOfIncident"
+                    name="dateOfIncident"
+                    type="date"
+                    value={formData.dateOfIncident}
+                    onChange={handleInputChange}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="mt-2 h-12"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="timeOfIncident" className="text-base font-semibold">
+                    Time of Incident (Approx)
+                  </Label>
+                  <Input
+                    id="timeOfIncident"
+                    name="timeOfIncident"
+                    type="time"
+                    value={formData.timeOfIncident}
+                    onChange={handleInputChange}
+                    className="mt-2 h-12"
+                  />
+                </div>
               </div>
+
+              {formData.dateOfIncident && (() => {
+                const incidentDate = new Date(formData.dateOfIncident);
+                const now = new Date();
+                const diffInHours = (now.getTime() - incidentDate.getTime()) / (1000 * 60 * 60);
+                if (diffInHours > 72) {
+                  return (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-900">Delayed Intimation Notice</p>
+                        <p className="text-xs text-amber-700">
+                          PMFBY guidelines recommend reporting claims within 72 hours of the incident.
+                          Your report is being submitted after {Math.floor(diffInHours)} hours.
+                          Please provide a clear justification in the description field in Step 2.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           )}
 
           {/* Step 2: Incident Details */}
           {currentStep === 2 && (
             <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="typeOfPeril" className="text-base font-semibold">
+                    Type of Peril <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={formData.typeOfPeril}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, typeOfPeril: value }))}
+                  >
+                    <SelectTrigger className="mt-2 h-12">
+                      <SelectValue placeholder="Select type of peril" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Flood">Flood/Inundation</SelectItem>
+                      <SelectItem value="Drought">Drought</SelectItem>
+                      <SelectItem value="Cyclone">Cyclone/Cyclonic Rain</SelectItem>
+                      <SelectItem value="Hailstorm">Hailstorm</SelectItem>
+                      <SelectItem value="Landslide">Landslide</SelectItem>
+                      <SelectItem value="Pests">Pests/Diseases</SelectItem>
+                      <SelectItem value="Fire">Natural Fire/Lightning</SelectItem>
+                      <SelectItem value="Cloudburst">Cloudburst</SelectItem>
+                      <SelectItem value="WildAnimalAttack">Wild Animal Attack</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="cropGrowthStage" className="text-base font-semibold">
+                    Crop Growth Stage <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={formData.cropGrowthStage}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, cropGrowthStage: value }))}
+                  >
+                    <SelectTrigger className="mt-2 h-12">
+                      <SelectValue placeholder="Select growth stage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Sowing">Sowing/Germination</SelectItem>
+                      <SelectItem value="Vegetative">Vegetative Stage</SelectItem>
+                      <SelectItem value="Flowering">Flowering Stage</SelectItem>
+                      <SelectItem value="Maturity">Maturity/Grain Filling</SelectItem>
+                      <SelectItem value="Harvested">Harvested (Post-harvest loss)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="affectedArea" className="text-base font-semibold">
+                    Affected Area (Hectares/Acres) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="affectedArea"
+                    name="affectedArea"
+                    type="number"
+                    step="0.01"
+                    value={formData.affectedArea}
+                    onChange={handleInputChange}
+                    placeholder="Area damaged"
+                    className="mt-2 h-12"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="estimatedLossPercentage" className="text-base font-semibold">
+                    Estimated Loss Percentage (%) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="estimatedLossPercentage"
+                    name="estimatedLossPercentage"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.estimatedLossPercentage}
+                    onChange={handleInputChange}
+                    placeholder="e.g. 50"
+                    className="mt-2 h-12"
+                    required
+                  />
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="location" className="text-base font-semibold">
                   Location of Incident <span className="text-red-500">*</span>
@@ -538,7 +719,7 @@ const ClaimSubmission = () => {
                   Damage Images <span className="text-red-500">*</span>
                 </Label>
                 <p className="text-sm text-gray-600 mt-1 mb-3">
-                  Upload clear photos showing the crop damage. Minimum 1 image required.
+                  Upload clear photos showing the crop damage. Minimum 2 images from different angles required.
                 </p>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-500 transition-colors">
                   <Input
@@ -756,8 +937,8 @@ const ClaimSubmission = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmSubmission} 
+            <AlertDialogAction
+              onClick={confirmSubmission}
               disabled={isSubmitting}
               className="bg-green-600 hover:bg-green-700"
             >

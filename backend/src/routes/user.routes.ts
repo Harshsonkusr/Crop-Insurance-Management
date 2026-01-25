@@ -3,21 +3,27 @@ import { authenticateToken, authorizeRoles, AuthRequest } from '../middleware/au
 import { Logger } from '../utils/logger';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserRole, UserStatus, ClaimStatus, PolicyStatus } from '@prisma/client';
 import { auditLogService } from '../services/auditLog.service';
+import { NotificationService } from '../services/notification.service';
+import multer from 'multer';
 
 const router = Router();
+const upload = multer();
 
-// Get pending Service Provider registrations (Super Admin/Admin only)
+// Get pending Insurer registrations (Super Admin/Admin only)
 router.get('/users/pending', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
     const pendingUsers = await prisma.user.findMany({
       where: {
-        role: UserRole.SERVICE_PROVIDER,
+        role: UserRole.INSURER,
         isApproved: false,
         status: UserStatus.pending
       },
       orderBy: { createdAt: 'desc' },
+      include: {
+        insurer: true,
+      },
     });
 
     // Map id to _id for frontend compatibility
@@ -34,7 +40,7 @@ router.get('/users/pending', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_
   }
 });
 
-// Approve/Reject Service Provider registration (Super Admin/Admin only)
+// Approve/Reject Insurer registration (Super Admin/Admin only)
 router.put('/users/:id/approve', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
@@ -45,8 +51,8 @@ router.put('/users/:id/approve', authenticateToken, authorizeRoles(['ADMIN', 'SU
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.role !== UserRole.SERVICE_PROVIDER) {
-      return res.status(400).json({ message: 'This endpoint is only for Service Provider accounts' });
+    if (user.role !== UserRole.INSURER) {
+      return res.status(400).json({ message: 'This endpoint is only for Insurer accounts' });
     }
 
     if (approved === true) {
@@ -56,12 +62,12 @@ router.put('/users/:id/approve', authenticateToken, authorizeRoles(['ADMIN', 'SU
           data: { isApproved: true, status: UserStatus.active },
         });
 
-        await tx.serviceProvider.upsert({
+        await tx.insurer.upsert({
           where: { userId: user.id },
           update: { status: 'active', kycVerified: true },
           create: {
             name: user.name,
-            email: user.email || `${user.mobileNumber}@serviceprovider.local`,
+            email: user.email || `${user.mobileNumber}@insurer.local`,
             phone: user.mobileNumber || '',
             address: '',
             serviceType: 'Crop Insurance',
@@ -77,30 +83,54 @@ router.put('/users/:id/approve', authenticateToken, authorizeRoles(['ADMIN', 'SU
         req.userId!,
         'user',
         id,
-        'Service Provider approved',
+        'Insurer approved',
         { before: { isApproved: user.isApproved, status: user.status }, after: { isApproved: true, status: UserStatus.active } }
       );
-      
+
+      // Notify Insurer
+      try {
+        await NotificationService.create(
+          user.id,
+          'Account Approved!',
+          'Congratulations! Your insurer account has been approved by the administrator. You can now login and manage policies and claims.',
+          'success'
+        );
+      } catch (notifError) {
+        Logger.error('Failed to notify insurer of approval', { notifError, userId: id });
+      }
+
       // Map id to _id for frontend compatibility
       const mappedUser = { ...user, _id: user.id, id: user.id };
-      res.json({ message: 'Service Provider account approved successfully', user: mappedUser });
+      res.json({ message: 'Insurer account approved successfully', user: mappedUser });
     } else {
       // Reject the account
       await prisma.user.update({ where: { id: user.id }, data: { status: UserStatus.banned } });
-      
+
       // Log admin action
       await auditLogService.logAdminOverride(
         req.userId!,
         'user',
         id,
-        rejectionReason || 'Service Provider registration rejected',
+        rejectionReason || 'Insurer registration rejected',
         { before: { status: user.status }, after: { status: UserStatus.banned } }
       );
 
+      // Notify Insurer
+      try {
+        await NotificationService.create(
+          user.id,
+          'Registration Rejected',
+          `Your insurer registration was rejected. Reason: ${rejectionReason || 'Registration rejected by administrator'}`,
+          'error'
+        );
+      } catch (notifError) {
+        Logger.error('Failed to notify insurer of rejection', { notifError, userId: id });
+      }
+
       // Map id to _id for frontend compatibility
       const mappedUser = { ...user, status: UserStatus.banned, _id: user.id, id: user.id };
-      res.json({ 
-        message: 'Service Provider registration rejected', 
+      res.json({
+        message: 'Insurer registration rejected',
         user: mappedUser,
         rejectionReason: rejectionReason || 'Registration rejected by administrator'
       });
@@ -118,7 +148,7 @@ router.get('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN'])
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { deletedAt: null };
     const orderBy: any = {};
 
     if (req.query.search) {
@@ -162,7 +192,15 @@ router.get('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN'])
 // Get a single user by ID (Admin and Super Admin only)
 router.get('/users/:id', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: {
+        farmDetails: true,
+        claims: true,
+        policies: true,
+        insurer: true
+      }
+    });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -173,10 +211,10 @@ router.get('/users/:id', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMI
 });
 
 // Add a new user (Super Admin/Admin only)
-// Super Admin can create: ADMIN, SERVICE_PROVIDER, FARMER
-// Admin can create: SERVICE_PROVIDER, FARMER (NOT other admins)
-router.post('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req: AuthRequest, res) => {
-  const { email, password, role, name, profilePhoto, mobileNumber } = req.body;
+// Super Admin can create: ADMIN, INSURER, FARMER
+// Admin can create: INSURER, FARMER (NOT other admins)
+router.post('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), upload.any(), async (req: AuthRequest, res) => {
+  const { email, password, role, name, profilePhoto, mobileNumber } = req.body || {};
 
   try {
     // Get the current user making the request
@@ -187,15 +225,15 @@ router.post('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']
 
     // Only SUPER_ADMIN can create ADMIN accounts
     if (role === 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ 
-        message: 'Access denied: Only Super Admin can create Admin accounts. Please contact Super Admin.' 
+      return res.status(403).json({
+        message: 'Access denied: Only Super Admin can create Admin accounts. Please contact Super Admin.'
       });
     }
 
-    // Only SUPER_ADMIN and ADMIN can create SERVICE_PROVIDER
-    if (role === 'SERVICE_PROVIDER' && !['SUPER_ADMIN', 'ADMIN'].includes(currentUser.role as string)) {
-      return res.status(403).json({ 
-        message: 'Access denied: Only Super Admin or Admin can create Service Provider accounts.' 
+    // Only SUPER_ADMIN and ADMIN can create INSURER
+    if (role === 'INSURER' && !['SUPER_ADMIN', 'ADMIN'].includes(currentUser.role as string)) {
+      return res.status(403).json({
+        message: 'Access denied: Only Super Admin or Admin can create Insurer accounts.'
       });
     }
 
@@ -206,7 +244,7 @@ router.post('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']
       }
     } else {
       if (!name || !email || !password) {
-        return res.status(400).json({ message: 'Name, email, and password are required for Admin/Service Provider' });
+        return res.status(400).json({ message: 'Name, email, and password are required for Admin/Insurer' });
       }
     }
 
@@ -248,11 +286,11 @@ router.post('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']
     let createdUser: CreatedUser | null = null;
     await prisma.$transaction(async (tx) => {
       createdUser = await tx.user.create({ data: userData });
-      if (role === 'SERVICE_PROVIDER') {
-        await tx.serviceProvider.create({
+      if (role === 'INSURER') {
+        await tx.insurer.create({
           data: {
             name: createdUser.name,
-            email: createdUser.email || `${createdUser.mobileNumber}@serviceprovider.local`,
+            email: createdUser.email || `${createdUser.mobileNumber}@insurer.local`,
             phone: createdUser.mobileNumber || '',
             address: '',
             serviceType: 'Crop Insurance',
@@ -278,9 +316,9 @@ router.post('/users', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']
 });
 
 // Edit an existing user (Admin and Super Admin only)
-router.put('/users/:id', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+router.put('/users/:id', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), upload.any(), async (req, res) => {
   const { id } = req.params;
-  const { email, password, role, name, profilePhoto, mobileNumber } = req.body;
+  const { email, password, role, name, profilePhoto, mobileNumber } = req.body || {};
 
   try {
     const user = await prisma.user.findUnique({ where: { id } });
@@ -347,12 +385,61 @@ router.delete('/users/:id', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_A
   const { id } = req.params;
 
   try {
-    const user = await prisma.user.delete({ where: { id } }).catch(() => null);
+    const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json({ message: 'User deleted successfully' });
+
+    // Cascading Soft delete: set deletedAt and update status for User and related entities
+    await prisma.$transaction(async (tx) => {
+      // 1. Soft delete User
+      await tx.user.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          status: UserStatus.banned,
+        } as any
+      });
+
+      // 2. Soft delete Claims (Cancel pending/active claims)
+      await tx.claim.updateMany({
+        where: { farmerId: id },
+        data: {
+          deletedAt: new Date(),
+          status: ClaimStatus.cancelled
+        } as any
+      });
+
+      // 3. Soft delete Policies (Mark as Inactive)
+      await tx.policy.updateMany({
+        where: { farmerId: id },
+        data: {
+          deletedAt: new Date(),
+          status: PolicyStatus.Inactive
+        } as any
+      });
+
+      // 4. Soft delete FarmDetails
+      await tx.farmDetails.updateMany({
+        where: { farmerId: id },
+        data: {
+          deletedAt: new Date()
+        } as any
+      });
+    });
+
+    // Log admin action
+    await auditLogService.logAdminOverride(
+      (req as AuthRequest).userId!,
+      'user',
+      id,
+      'User and related data (Claims, Policies) soft-deleted by administrator',
+      { before: { deletedAt: (user as any).deletedAt, status: user.status }, after: { deletedAt: new Date(), status: UserStatus.banned } }
+    );
+
+    res.json({ message: 'User deleted (soft-delete) successfully' });
   } catch (error) {
+    Logger.error('Error soft-deleting user', { error, userId: id });
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -419,11 +506,11 @@ router.get('/farm-details/:farmerId', authenticateToken, authorizeRoles(['ADMIN'
   try {
     const { farmerId } = req.params;
     const farmDetails = await prisma.farmDetails.findUnique({ where: { farmerId } });
-    
+
     if (!farmDetails) {
       return res.status(404).json({ message: 'Farm details not found for this farmer' });
     }
-    
+
     res.json(farmDetails);
   } catch (error) {
     console.error('Error fetching farm details:', error);
@@ -468,7 +555,7 @@ router.get('/policies', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN
         take: limit,
         include: {
           farmer: { select: { name: true, email: true, mobileNumber: true } },
-          serviceProvider: { select: { name: true, email: true } },
+          insurer: { select: { name: true, email: true } },
         },
       }),
       prisma.policy.count({ where }),
@@ -523,14 +610,14 @@ router.get('/ai-reviews/:claimId', authenticateToken, authorizeRoles(['ADMIN', '
   }
 });
 
-// Admin forwards AI report to Service Provider
+// Admin forwards AI report to Insurer
 router.post('/ai-reviews/:claimId/forward', authenticateToken, authorizeRoles(['ADMIN', 'SUPER_ADMIN']), async (req: AuthRequest, res) => {
   try {
     const { claimId } = req.params;
     const { adminNotes, overrideData } = req.body;
     const adminId = (req as AuthRequest).userId!;
 
-    const result = await adminReviewService.forwardReportToServiceProvider(
+    const result = await adminReviewService.forwardReportToInsurer(
       claimId,
       adminId,
       adminNotes,
@@ -539,7 +626,7 @@ router.post('/ai-reviews/:claimId/forward', authenticateToken, authorizeRoles(['
 
     res.json(result);
   } catch (error: any) {
-    Logger.error('Error forwarding AI report to SP', { error, claimId: req.params.claimId, adminId: (req as AuthRequest).userId });
+    Logger.error('Error forwarding AI report to Insurer', { error, claimId: req.params.claimId, adminId: (req as AuthRequest).userId });
     res.status(error.message.includes('not found') || error.message.includes('not pending') ? 404 : 500).json({ message: error.message });
   }
 });

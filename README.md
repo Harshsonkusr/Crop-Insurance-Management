@@ -92,6 +92,7 @@ ClaimEasy/
 - [Testing Guide](./TESTING_GUIDE.md) - Testing instructions
 - [Quick Start Testing](./QUICK_START_TESTING.md) - Quick testing guide
 - [Backend Fixes Summary](./BACKEND_FIXES_SUMMARY.md) - Backend implementation details
+- [**Start Here: Demo Script**](./DEMO_SCRIPT.md) - Step-by-step guide to presenting the project
 
 ## Features
 

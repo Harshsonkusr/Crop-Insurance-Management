@@ -12,7 +12,7 @@ generator client {
 enum UserRole {
   SUPER_ADMIN
   ADMIN
-  SERVICE_PROVIDER
+  INSURER
   FARMER
 }
 
@@ -22,7 +22,7 @@ enum UserStatus {
   pending
 }
 
-enum ServiceProviderStatus {
+enum InsurerStatus {
   active
   inactive
   pending
@@ -109,12 +109,17 @@ model User {
   emailEncrypted        String? // Encrypted email
   otp                   String?
   otpExpires            DateTime?
+  gender                String?
+  dateOfBirth           String?
   status                UserStatus @default(active)
-  isApproved            Boolean    @default(true)
+  isApproved            Boolean    @default(false)
+  deletedAt             DateTime?
+  resetToken            String?
+  resetTokenExpires     DateTime?
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
-  serviceProvider ServiceProvider?
+  insurer         Insurer?
   policies        Policy[]         @relation("PolicyFarmer")
   policyRequests  PolicyRequest[]
   claims          Claim[]          @relation("ClaimFarmer")
@@ -123,37 +128,50 @@ model User {
   auditLogs       AuditLog[]
   consents        Consent[]
   sessions        Session[]
+  notifications   Notification[]
 }
 
-model ServiceProvider {
-  id            String                @id @default(uuid())
-  user          User                  @relation(fields: [userId], references: [id])
-  userId        String                @unique
-  name          String
-  email         String                @unique
-  phone         String                @unique
-  address       String?
-  serviceType   String
-  licenseNumber String? // For KYC verification
-  kycVerified   Boolean               @default(false)
-  kycDocuments  Json? // Store KYC document paths/metadata
-  status        ServiceProviderStatus @default(pending)
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+model Insurer {
+  id                 String        @id @default(uuid())
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String        @unique
+  name               String
+  email              String        @unique
+  phone              String        @unique
+  address            String?
+  state              String?
+  district           String?
+  businessName       String?
+  insurerType        String? // Maps to spType
+  serviceDescription String? // Maps to servicesProvided
+  gstNumber          String?
+  panNumber          String?
+  licenseNumber      String? // For KYC verification
+  licenseExpiryDate  DateTime?
+  aiCertified        Boolean       @default(false)
+  serviceArea        String?
+  serviceType        String // Kept for backward compatibility or general category
+  kycVerified        Boolean       @default(false)
+  kycDocuments       Json? // Store KYC document paths/metadata
+  status             InsurerStatus @default(pending)
+  deletedAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   policies       Policy[]
   policyRequests PolicyRequest[]
   claims         Claim[]         @relation("ClaimAssignedTo")
-  crops          Crop[]          @relation("ServiceProviderCrops")
+  crops          Crop[]          @relation("InsurerCrops")
 }
 
 model Policy {
   id                 String           @id @default(uuid())
   policyNumber       String           @unique
-  farmer             User             @relation("PolicyFarmer", fields: [farmerId], references: [id])
+  farmer             User             @relation("PolicyFarmer", fields: [farmerId], references: [id], onDelete: Cascade)
   farmerId           String
-  serviceProvider    ServiceProvider  @relation(fields: [serviceProviderId], references: [id])
-  serviceProviderId  String
+  insurer            Insurer          @relation(fields: [insurerId], references: [id])
+  insurerId          String
+  landRecordKhasra   String?          // Unique identifier for the land plot
   cropType           String
   insuredArea        Float
   startDate          DateTime
@@ -169,16 +187,19 @@ model Policy {
   insurerApiResponse Json? // Store external API response
   // Policy images from creation (for AI matching with claim images)
   policyImages       Json? // Array of image paths/metadata from policy creation
+  // Policy documents (land records, etc.) copied from request
+  policyDocuments    Json? // Array of document paths/metadata
   // Crop details from policy request
   cropDetails        Json? // Crop variety, expected yield, cultivation season, etc.
+  deletedAt          DateTime?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
-  claims       Claim[]         @relation("ClaimPolicy")
-  chosenByClaims Claim[]         @relation("ChosenPolicy")
+  claims         Claim[] @relation("ClaimPolicy")
+  chosenByClaims Claim[] @relation("ChosenPolicy")
 
   @@index([farmerId, status])
-  @@index([serviceProviderId])
+  @@index([insurerId])
   @@index([source, syncStatus])
 }
 
@@ -190,9 +211,9 @@ model Claim {
   // Policy conflict resolution: if multiple active policies exist, store chosen one
   chosenPolicy          Policy?            @relation("ChosenPolicy", fields: [chosenPolicyId], references: [id])
   chosenPolicyId        String?
-  farmer                User               @relation("ClaimFarmer", fields: [farmerId], references: [id])
+  farmer                User               @relation("ClaimFarmer", fields: [farmerId], references: [id], onDelete: Cascade)
   farmerId              String
-  assignedTo            ServiceProvider?   @relation("ClaimAssignedTo", fields: [assignedToId], references: [id])
+  assignedTo            Insurer?           @relation("ClaimAssignedTo", fields: [assignedToId], references: [id])
   assignedToId          String?
   description           String
   locationOfIncident    String
@@ -218,6 +239,12 @@ model Claim {
   // Admin override
   adminOverrideReason   String?
   adminOverrideAt       DateTime?
+  // Payout / Settlement
+  payoutAmount          Float?
+  payoutDate            DateTime?
+  payoutTransactionId   String?
+  payoutStatus          String?            @default("pending") // pending, processing, paid, failed
+  deletedAt             DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -247,43 +274,86 @@ model ClaimDocument {
 }
 
 model FarmDetails {
-  id                 String   @id @default(uuid())
-  farmer             User     @relation("UserFarmDetails", fields: [farmerId], references: [id])
-  farmerId           String   @unique
-  farmId             String?
-  farmName           String?
-  location           String?
-  address            String? // Village/District
-  district           String?
-  village            String?
-  area               Float?
-  farmSize           String?
-  crops              String[]
-  cropType           String?
-  soilType           String?
-  irrigationMethod   String?
-  ownerName          String?
+  id                       String   @id @default(uuid())
+  farmer                   User     @relation("UserFarmDetails", fields: [farmerId], references: [id], onDelete: Cascade)
+  farmerId                 String   @unique
+  farmId                   String?
+  farmName                 String?
+  location                 String?
+  address                  String? // Village/District
+  district                 String?
+  village                  String?
+  area                     Float?
+  farmSize                 String?
+  crops                    String[]
+  cropType                 String?
+  soilType                 String?
+  irrigationMethod         String?
+  ownerName                String?
   // Aadhaar - stored as HMAC-SHA256 hash (never raw)
-  aadhaarHash        String?  @unique // HMAC-SHA256 hash of Aadhaar
-  latitude           String?
-  longitude          String?
-  verificationStatus String?  @default("Pending")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  aadhaarHash              String?  @unique // HMAC-SHA256 hash of Aadhaar
+  latitude                 String?
+  longitude                String?
+  casteCategory            String?
+  farmerType               String?
+  farmerCategory           String?
+  loaneeStatus             String?
+  state                    String?
+  tehsil                   String?
+  pincode                  String?
+  landRecordKhasra         String?
+  landRecordKhatauni       String?
+  surveyNumber             String?
+  landAreaSize             Float?
+  insuranceUnit            String?
+  cropName                 String?
+  cropVariety              String?
+  cropSeason               String?
+  insuranceLinked          Boolean  @default(false)
+  wildAnimalAttackCoverage Boolean  @default(false)
+  bankName                 String?
+  bankAccountNo            String?
+  bankIfsc                 String?
+  satbaraImage             String?
+  patwariMapImage          String?
+  sowingCertificate        String?
+  bankPassbookImage        String?
+  aadhaarCardImage         String?
+  landImage1               String?
+  landImage1Gps            String?
+  landImage2               String?
+  landImage2Gps            String?
+  landImage3               String?
+  landImage3Gps            String?
+  landImage4               String?
+  landImage4Gps            String?
+  landImage5               String?
+  landImage5Gps            String?
+  landImage6               String?
+  landImage6Gps            String?
+  landImage7               String?
+  landImage7Gps            String?
+  landImage8               String?
+  landImage8Gps            String?
+  verificationStatus       String?  @default("Pending")
+  deletedAt                DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   @@index([aadhaarHash])
 }
 
 model Crop {
-  id                String          @id @default(uuid())
-  serviceProvider   ServiceProvider @relation("ServiceProviderCrops", fields: [serviceProviderId], references: [id])
-  serviceProviderId String
+  id                String   @id @default(uuid())
+  insurer           Insurer  @relation("InsurerCrops", fields: [insurerId], references: [id])
+  insurerId         String
   name              String
   description       String?
   expectedYield     Float?
   cultivationSeason String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model AuditLog {
@@ -309,7 +379,7 @@ model SystemSettings {
 
 model UserPreferences {
   id                 String   @id @default(uuid())
-  user               User     @relation(fields: [userId], references: [id])
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId             String   @unique
   sidebarOpen        Boolean  @default(true)
   theme              Theme    @default(light)
@@ -324,7 +394,7 @@ model UserPreferences {
 // Consent management for Aadhaar and data sharing
 model Consent {
   id          String      @id @default(uuid())
-  user        User        @relation(fields: [userId], references: [id])
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
   consentType ConsentType
   consentText String // Full text of consent
@@ -343,7 +413,7 @@ model Consent {
 // Session management for multi-device support
 model Session {
   id           String        @id @default(uuid())
-  user         User          @relation(fields: [userId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId       String
   token        String        @unique // JWT token (or refresh token)
   refreshToken String?       @unique // Refresh token if using JWT+refresh
@@ -380,11 +450,11 @@ model IdempotencyKey {
 
 // Policy request workflow (farmer requests, SP issues)
 model PolicyRequest {
-  id                 String           @id @default(uuid())
-  farmer             User             @relation(fields: [farmerId], references: [id])
+  id                 String    @id @default(uuid())
+  farmer             User      @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   farmerId           String
-  serviceProvider    ServiceProvider? @relation(fields: [serviceProviderId], references: [id])
-  serviceProviderId  String?
+  insurer            Insurer?  @relation(fields: [insurerId], references: [id])
+  insurerId          String?
   cropType           String
   insuredArea        Float
   requestedStartDate DateTime?
@@ -393,14 +463,16 @@ model PolicyRequest {
   farmImages         Json? // Array of farm photo paths/metadata from different angles
   // Detailed crop information
   cropDetails        Json? // Crop variety, expected yield, cultivation season, soil type, irrigation method, etc.
-  status             String           @default("pending") // pending, approved, rejected, issued
+  paymentDetails     Json? // Mock payment transaction details
+  status             String    @default("pending") // pending, approved, rejected, issued
   rejectionReason    String?
   issuedPolicyId     String? // Link to Policy if issued
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([farmerId, status])
-  @@index([serviceProviderId, status])
+  @@index([insurerId, status])
 }
 
 // Rate limit tracking
@@ -418,6 +490,7 @@ model RateLimit {
 }
 
 // AI task queue tracking
+
 model AiTask {
   id           String    @id @default(uuid())
   claimId      String
@@ -435,4 +508,18 @@ model AiTask {
 
   @@index([claimId, status])
   @@index([status, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String // 'info', 'success', 'warning', 'error'
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
 }

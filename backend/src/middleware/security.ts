@@ -5,30 +5,30 @@ import { Logger } from '../utils/logger';
 export const securityHeaders = (req: Request, res: Response, next: NextFunction) => {
   // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  
+
   // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  
+
   // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
+
   // Strict Transport Security (HTTPS only in production)
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
-  
+
   // Content Security Policy
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
   );
-  
+
   // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
+
   // Permissions Policy
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  
+
   next();
 };
 
@@ -45,23 +45,23 @@ interface RateLimitConfig {
 const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   '/api/auth/send-otp': { maxRequests: 1000, windowMs: 60 * 60 * 1000 }, // 1000 per hour (effectively no limit)
   '/api/auth/verify-otp': { maxRequests: 100, windowMs: 60 * 60 * 1000 }, // 100 per hour
-  '/api/claims': { maxRequests: 10, windowMs: 24 * 60 * 60 * 1000 }, // 10 per day
-  '/api/uploads': { maxRequests: 60, windowMs: 60 * 1000 }, // 60 per minute
-  default: { maxRequests: 100, windowMs: 15 * 60 * 1000 }, // 100 per 15 minutes
+  '/api/claims': { maxRequests: 100, windowMs: 24 * 60 * 60 * 1000 }, // Increased for dev (100 per day)
+  '/api/uploads': { maxRequests: 100, windowMs: 60 * 1000 }, // 100 per minute for dev
+  default: { maxRequests: 1000, windowMs: 15 * 60 * 1000 }, // 1000 per 15 minutes for dev
 };
 
 export const rateLimiter = (config?: RateLimitConfig) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const endpoint = req.path;
-      
+
       // Skip rate limiting for send-otp endpoint (unlimited requests)
       if (endpoint === '/api/auth/send-otp' || endpoint === '/send-otp') {
         return next();
       }
-      
+
       const limitConfig = config || RATE_LIMIT_CONFIGS[endpoint] || RATE_LIMIT_CONFIGS.default;
-      
+
       // Get identifier (IP or user ID)
       let identifier: string;
       if (limitConfig.identifier) {

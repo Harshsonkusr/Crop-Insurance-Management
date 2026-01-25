@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, LogOut } from "lucide-react";
 import Logo from "./Logo";
 import { useState } from "react";
+import NotificationCenter from "./NotificationCenter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "./Auth/AuthContext"; // Import useAuth hook
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Assuming you have an Avatar component
@@ -73,13 +74,12 @@ const Navbar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive(item.path)
-                      ? "text-primary bg-primary/10"
-                      : item.name === "Login"
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${isActive(item.path)
+                    ? "text-primary bg-primary/10"
+                    : item.name === "Login"
                       ? "bg-green-500 text-white hover:bg-green-600"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {item.name}
                 </Link>
@@ -92,16 +92,20 @@ const Navbar = () => {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive(item.path)
-                          ? "text-primary bg-primary/10"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      }`}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${isActive(item.path)
+                        ? "text-primary bg-primary/10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
                     >
                       {item.name}
                     </Link>
                   ))
                 )}
+
+                <div className="mr-2">
+                  <NotificationCenter />
+                </div>
+
                 <div className="flex items-center space-x-2 ml-4">
                   <Avatar>
                     <AvatarImage src={user.profilePhoto || "https://github.com/shadcn.png"} alt="User Avatar" />
@@ -156,13 +160,12 @@ const Navbar = () => {
                   key={item.path}
                   to={item.path}
                   onClick={() => setIsOpen(false)}
-                  className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive(item.path)
-                      ? "text-primary bg-primary/10"
-                      : item.name === "Login"
+                  className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${isActive(item.path)
+                    ? "text-primary bg-primary/10"
+                    : item.name === "Login"
                       ? "bg-green-500 text-white hover:bg-green-600"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {item.name}
                 </Link>
@@ -175,11 +178,10 @@ const Navbar = () => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsOpen(false)}
-                      className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive(item.path)
-                          ? "text-primary bg-primary/10"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      }`}
+                      className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${isActive(item.path)
+                        ? "text-primary bg-primary/10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
                     >
                       {item.name}
                     </Link>
