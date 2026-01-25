@@ -1,0 +1,29 @@
+server {
+    listen 80;
+    # Replace 'your-domain.com' with your purchased domain or keep the IP if no domain yet
+    server_name your-domain.com www.your-domain.com 103.159.239.34;
+
+    root /var/www/html;
+    index index.html;
+
+    # Frontend (React App)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend API Proxy
+    location /api {
+        # Forward requests to the Node.js backend running on port 5000
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Optional: Serve uploaded files directly (if stored locally)
+    location /uploads {
+        alias /var/www/backend/uploads;
+    }
+}
