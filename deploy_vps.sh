@@ -98,6 +98,11 @@ pm2 save
 echo "🎨 [5/7] Building Frontend..."
 cd $APP_DIR
 npm install
+
+# Set Environment Variables for Production Build
+export VITE_API_BASE_URL="http://103.159.239.34/api"
+export VITE_API_URL="http://103.159.239.34"
+
 npm run build
 
 # 6. Nginx Setup
