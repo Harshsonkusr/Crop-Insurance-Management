@@ -63,5 +63,8 @@
     "supertest": "^7.1.4",
     "ts-jest": "^29.4.6",
     "ts-node-dev": "^2.0.0"
+  },
+  "prisma": {
+    "seed": "node dist/seed.js"
   }
 }
