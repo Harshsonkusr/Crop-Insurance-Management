@@ -1,18 +1,13 @@
 {
-  "version": 2,
-  "builds": [
+  "framework": "vite",
+  "rewrites": [
     {
-      "src": "Dockerfile",
-      "use": "@vercel/docker"
-    }
-  ],
-  "routes": [
+      "source": "/api/(.*)",
+      "destination": "http://103.159.239.34/api/$1"
+    },
     {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_API_BASE_URL": "/api"
-  }
+  ]
 }
