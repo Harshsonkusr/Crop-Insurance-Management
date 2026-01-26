@@ -8,11 +8,24 @@ This document outlines the step-by-step process to deploy the ClaimEasy project 
 **Goal:** Get the website live at `http://103.159.239.34` with working OTPs.
 
 ### Step 1: Prepare the VPS
+
+#### ⚠️ CRITICAL: Password Issues
+The default password `J^Lc+U4YSZW2$&pZ4ja(i)` is very difficult to type/paste correctly because of the special symbols (`^`, `$`, `&`, `(`).
+
+**If you get "Permission Denied" or "Connection closed":**
+1.  **STOP trying the old password.** The server might block you for too many failed attempts.
+2.  Log in to your **Hosting Provider Dashboard**.
+3.  Find the **"Reset Root Password"** or **"Change Password"** option for this VPS.
+4.  Set a simpler password (only letters and numbers), for example: `CropAdmin2026Secure`
+5.  Wait 1-2 minutes.
+6.  Try logging in again with the new password.
+
+#### Connect via SSH
 1. Open your terminal (PowerShell/Command Prompt).
 2. Connect to your VPS:
    ```bash
    ssh root@103.159.239.34
-   # Password: (Use the password provided by your hosting provider)
+   # Use the NEW password you just set.
    ```
 
 ### Step 2: Run Automated Deployment
