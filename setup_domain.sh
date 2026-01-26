@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# 🌐 ClaimEasy Domain & SSL Setup Script
+# 🌐 ClaimEasy Domain & SSL Setup Script (Alma Linux 9)
 # ==========================================
 
 # Exit on error
@@ -29,8 +29,8 @@ echo "--------------------------------------------------"
 echo "🔧 Configuring Nginx for $DOMAIN_NAME..."
 echo "--------------------------------------------------"
 
-# Create Nginx Config
-cat > /etc/nginx/sites-available/claimeasy <<EOF
+# Create Nginx Config in conf.d (Alma Linux standard)
+cat > /etc/nginx/conf.d/claimeasy.conf <<EOF
 server {
     listen 80;
     server_name $DOMAIN_NAME www.$DOMAIN_NAME;
@@ -55,14 +55,10 @@ server {
 
     # Uploads
     location /uploads {
-        alias /var/www/backend/uploads;
+        alias /var/www/claimeasy/backend/uploads;
     }
 }
 EOF
-
-# Link config
-ln -sf /etc/nginx/sites-available/claimeasy /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
 
 # Test Nginx
 nginx -t
@@ -78,8 +74,7 @@ echo "--------------------------------------------------"
 
 # Install Certbot if not present
 if ! command -v certbot &> /dev/null; then
-    apt-get update
-    apt-get install -y certbot python3-certbot-nginx
+    dnf install -y certbot python3-certbot-nginx
 fi
 
 # Obtain SSL Certificate
