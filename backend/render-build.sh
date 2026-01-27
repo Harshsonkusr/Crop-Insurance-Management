@@ -13,7 +13,7 @@ npx prisma generate
 
 echo "Running Database Migrations (RESETTING FOR FIX)..."
 # Using migrate reset force to fix the 'failed migration' error on free tier
-npx prisma migrate reset --force
+npx prisma migrate reset --force --skip-seed
 
 # echo "Seeding Database..."
 # npx prisma db seed
