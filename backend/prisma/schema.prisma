@@ -171,7 +171,7 @@ model Policy {
   farmerId           String
   insurer            Insurer          @relation(fields: [insurerId], references: [id])
   insurerId          String
-  landRecordKhasra   String?          // Unique identifier for the land plot
+  landRecordKhasra   String? // Unique identifier for the land plot
   cropType           String
   insuredArea        Float
   startDate          DateTime
@@ -274,9 +274,9 @@ model ClaimDocument {
 }
 
 model FarmDetails {
-  id                       String   @id @default(uuid())
-  farmer                   User     @relation("UserFarmDetails", fields: [farmerId], references: [id], onDelete: Cascade)
-  farmerId                 String   @unique
+  id                       String    @id @default(uuid())
+  farmer                   User      @relation("UserFarmDetails", fields: [farmerId], references: [id], onDelete: Cascade)
+  farmerId                 String    @unique
   farmId                   String?
   farmName                 String?
   location                 String?
@@ -291,7 +291,7 @@ model FarmDetails {
   irrigationMethod         String?
   ownerName                String?
   // Aadhaar - stored as HMAC-SHA256 hash (never raw)
-  aadhaarHash              String?  @unique // HMAC-SHA256 hash of Aadhaar
+  aadhaarHash              String?   @unique // HMAC-SHA256 hash of Aadhaar
   latitude                 String?
   longitude                String?
   casteCategory            String?
@@ -309,8 +309,8 @@ model FarmDetails {
   cropName                 String?
   cropVariety              String?
   cropSeason               String?
-  insuranceLinked          Boolean  @default(false)
-  wildAnimalAttackCoverage Boolean  @default(false)
+  insuranceLinked          Boolean   @default(false)
+  wildAnimalAttackCoverage Boolean   @default(false)
   bankName                 String?
   bankAccountNo            String?
   bankIfsc                 String?
@@ -335,25 +335,25 @@ model FarmDetails {
   landImage7Gps            String?
   landImage8               String?
   landImage8Gps            String?
-  verificationStatus       String?  @default("Pending")
+  verificationStatus       String?   @default("Pending")
   deletedAt                DateTime?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([aadhaarHash])
 }
 
 model Crop {
-  id                String   @id @default(uuid())
-  insurer           Insurer  @relation("InsurerCrops", fields: [insurerId], references: [id])
+  id                String    @id @default(uuid())
+  insurer           Insurer   @relation("InsurerCrops", fields: [insurerId], references: [id])
   insurerId         String
   name              String
   description       String?
   expectedYield     Float?
   cultivationSeason String?
   deletedAt         DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model AuditLog {

@@ -11,8 +11,9 @@ npm run build
 echo "Generating Prisma Client..."
 npx prisma generate
 
-echo "Running Database Migrations..."
-npx prisma migrate deploy
+echo "Running Database Migrations (RESETTING FOR FIX)..."
+# Using migrate reset force to fix the 'failed migration' error on free tier
+npx prisma migrate reset --force
 
 echo "Seeding Database..."
 npx prisma db seed
